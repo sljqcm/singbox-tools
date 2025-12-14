@@ -11,7 +11,7 @@
 # 项目信息常量
 AUTHOR="LittleDoraemon"
 VERSION="v1.0.1"
-SINGBOX_VERSION="1.8.11"
+SINGBOX_VERSION="1.12.8"
 
 # 调试模式（可通过环境变量 DEBUG_MODE=true 启用）
 DEBUG_MODE=${DEBUG_MODE:-false}
@@ -843,15 +843,14 @@ EOF
 # 显示主菜单
 show_main_menu() {
     clear
-    print_blue "==============================================="
-    print_blue "          sing-box 一键安装管理脚本"
-    print_blue "==============================================="
+    echo -e "${BLUE}===============================================${NC}"
+    echo -e "${BLUE}          sing-box 一键安装管理脚本${NC}"
+    echo -e "${SKYBLUE}          作者: $AUTHOR${NC}"
+    echo -e "${SKYBLUE}          版本: $VERSION${NC}"
+    echo -e "${SKYBLUE}          sing-box版本: $SINGBOX_VERSION${NC}"
+    echo -e "${BLUE}===============================================${NC}"
     echo ""
-    print_skyblue "作者: $AUTHOR"
-    print_skyblue "版本: $VERSION"
-    print_skyblue "sing-box版本: $SINGBOX_VERSION"
     echo ""
-    
     # 检查sing-box是否已安装
     local singbox_installed="未安装"
     if command -v sing-box &> /dev/null; then
@@ -868,17 +867,27 @@ show_main_menu() {
     echo -e "服务状态: $([[ "$singbox_status" == "运行中" ]] && echo -e "${GREEN}$singbox_status${NC}" || echo -e "${RED}$singbox_status${NC}")"
     echo ""
     print_green "1. 一键安装sing-box"
+    print_skyblue "------------------"
     print_green "2. 卸载sing-box"
+    print_skyblue "------------------"
     print_green "3. 启动sing-box服务"
+    print_skyblue "------------------"
     print_green "4. 停止sing-box服务"
+    print_skyblue "------------------"
     print_green "5. 重启sing-box服务"
+    print_skyblue "------------------"
     print_green "6. 查看sing-box运行状态"
+    print_skyblue "------------------"
     print_green "7. 修改节点配置"
+    print_skyblue "------------------"
     print_green "8. 查看配置文件"
+    print_skyblue "------------------"
     print_green "9. 配置文件备份与恢复"
+    print_skyblue "------------------"
     print_green "10. 查看日志"
+    print_skyblue "------------------"
     print_purple "0. 退出脚本"
-    echo ""
+    print_skyblue "------------------"
     print_skyblue "==============================================="
     read -p "请输入选择: " choice
     
@@ -943,13 +952,20 @@ show_config_menu() {
     print_cyan "配置状态: $config_status"
     echo ""
     print_cyan "请选择操作:"
-    print_green "1. 修改端口"                print_skyblue "------------------" \
-    print_green "2. 修改UUID"                print_skyblue "------------------" \
-    print_green "3. 修改Reality伪装域名"     print_skyblue "------------------" \
-    print_green "4. 备份当前配置"            print_skyblue "------------------" \
-    print_green "5. 恢复配置文件"            print_skyblue "------------------" \
-    print_green "6. 查看当前配置"            print_skyblue "------------------" \
-    print_purple "0. 返回主菜单"              print_skyblue "------------------"
+    print_green "1. 修改端口"
+    print_skyblue "------------------"
+    print_green "2. 修改UUID"
+    print_skyblue "------------------"
+    print_green "3. 修改Reality伪装域名"
+    print_skyblue "------------------"
+    print_green "4. 备份当前配置"
+    print_skyblue "------------------"
+    print_green "5. 恢复配置文件"
+    print_skyblue "------------------"
+    print_green "6. 查看当前配置"
+    print_skyblue "------------------"
+    print_purple "0. 返回主菜单"
+    print_skyblue "------------------"
     echo ""
     
     read -p "请输入选择: " choice
@@ -993,11 +1009,16 @@ show_log_menu() {
     
     echo ""
     print_cyan "请选择操作:"
-    print_green "1. 查看完整安装日志"        print_skyblue "------------------" \
-    print_green "2. 查看最近300行日志"       print_skyblue "------------------" \
-    print_green "3. 实时监控日志"            print_skyblue "------------------" \
-    print_green "4. 清空日志文件"            print_skyblue "------------------" \
-    print_purple "0. 返回主菜单"              print_skyblue "------------------"
+    print_green "1. 查看完整安装日志"
+    print_skyblue "------------------"
+    print_green "2. 查看最近300行日志"
+    print_skyblue "------------------"
+    print_green "3. 实时监控日志"
+    print_skyblue "------------------"
+    print_green "4. 清空日志文件"
+    print_skyblue "------------------"
+    print_purple "0. 返回主菜单"
+    print_skyblue "------------------"
     echo ""
     
     read -p "请输入选择: " choice
@@ -1034,8 +1055,11 @@ show_backup_menu() {
     print_blue "==============================================="
     echo ""
     print_green "1. 备份当前配置文件"
+    print_skyblue "------------------"
     print_green "2. 恢复配置文件"
+    print_skyblue "------------------"
     print_purple "0. 返回主菜单"
+    print_skyblue "------------------"
     echo ""
     print_skyblue "==============================================="
     read -p "请输入选择: " choice
@@ -1835,10 +1859,18 @@ view_full_logs() {
     echo ""
     
     if [[ -f "$LOG_FILE" ]]; then
-        if command -v less &> /dev/null; then
-            less "$LOG_FILE"
+        local log_size=$(stat -f%z "$LOG_FILE" 2>/dev/null || stat -c%s "$LOG_FILE" 2>/dev/null || echo "0")
+        if [[ "$log_size" -eq 0 ]]; then
+            print_info "日志文件为空"
         else
-            cat "$LOG_FILE"
+            print_info "日志文件大小: $(($log_size / 1024)) KB"
+            echo "提示: 使用 less 查看时，按 q 键退出查看器"
+            echo "----------------------------------------"
+            if command -v less &> /dev/null; then
+                less "$LOG_FILE"
+            else
+                cat "$LOG_FILE"
+            fi
         fi
     else
         print_warning "日志文件不存在: $LOG_FILE"
@@ -1858,10 +1890,16 @@ view_recent_logs() {
         return
     fi
     
-    print_info "最近300行日志内容 ($LOG_FILE):"
-    echo "----------------------------------------"
-    tail -n 300 "$LOG_FILE"
-    echo "----------------------------------------"
+    local log_size=$(stat -f%z "$LOG_FILE" 2>/dev/null || stat -c%s "$LOG_FILE" 2>/dev/null || echo "0")
+    if [[ "$log_size" -eq 0 ]]; then
+        print_info "日志文件为空"
+        echo "----------------------------------------"
+    else
+        print_info "最近300行日志内容 ($LOG_FILE):"
+        echo "----------------------------------------"
+        tail -n 300 "$LOG_FILE"
+        echo "----------------------------------------"
+    fi
     read -p "按回车键返回日志菜单..." dummy
     show_log_menu
 }
@@ -1877,6 +1915,10 @@ monitor_logs() {
     echo ""
     
     if [[ -f "$LOG_FILE" ]]; then
+        local log_size=$(stat -f%z "$LOG_FILE" 2>/dev/null || stat -c%s "$LOG_FILE" 2>/dev/null || echo "0")
+        if [[ "$log_size" -eq 0 ]]; then
+            print_info "日志文件为空，等待新日志内容..."
+        fi
         if command -v tail &> /dev/null; then
             tail -f "$LOG_FILE"
         else
