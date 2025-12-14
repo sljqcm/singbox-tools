@@ -1238,9 +1238,12 @@ manage_service() {
             log_info "sing-box 服务${action_chinese}成功"
             print_info "sing-box 服务${action_chinese}成功"
             return 0
+        else
             log_error "sing-box 服务${action_chinese}失败"
             print_error "sing-box 服务${action_chinese}失败"
             return 1
+        fi
+    else
         # 对于不支持systemctl的系统，根据具体系统类型使用不同的管理方式
         log_debug "systemctl不可用，使用备用服务管理方式"
         if [[ $OS == "alpine" ]]; then
@@ -1253,12 +1256,17 @@ manage_service() {
                     log_info "sing-box 服务${action_chinese}成功"
                     print_info "sing-box 服务${action_chinese}成功"
                     return 0
+                else
                     log_error "sing-box 服务${action_chinese}失败"
                     print_error "sing-box 服务${action_chinese}失败"
                     return 1
+                fi
+            else
                 log_error "Alpine系统缺少rc-service命令"
                 print_error "Alpine系统缺少rc-service命令"
                 return 1
+            fi
+        else
             # 其他系统尝试使用service命令
             if command -v service &> /dev/null; then
                 log_debug "使用service命令管理服务: service sing-box $action"
@@ -1267,9 +1275,12 @@ manage_service() {
                     log_info "sing-box 服务${action_chinese}成功"
                     print_info "sing-box 服务${action_chinese}成功"
                     return 0
+                else
                     log_error "sing-box 服务${action_chinese}失败"
                     print_error "sing-box 服务${action_chinese}失败"
                     return 1
+                fi
+            else
                 log_error "系统不支持服务管理命令"
                 print_error "系统不支持服务管理命令"
                 return 1
@@ -1344,6 +1355,8 @@ check_singbox_status() {
             netstat -tulnp | grep sing-box
             echo "IPv6监听端口:"
             netstat -tulnp6 | grep sing-box
+        fi
+    else
         print_info "sing-box 进程状态: 未运行"
     fi
     
@@ -1351,6 +1364,7 @@ check_singbox_status() {
     echo ""
     if [[ -f "$CONFIG_FILE" ]]; then
         print_info "配置文件状态: 存在 ($CONFIG_FILE)"
+    else
         print_info "配置文件状态: 不存在"
     fi
     
@@ -1437,18 +1451,23 @@ modify_port() {
             print_info "端口已更新为: $new_port"
             log_info "端口已更新为: $new_port"
             update_success=true
+        else
             print_error "使用jq更新端口失败"
             log_error "使用jq更新端口失败"
+        fi
         # 如果没有jq，使用sed替换端口
         local old_port=$(grep -o '"listen_port":[[:space:]]*[0-9]*' "$config_file" | head -1 | grep -o '[0-9]*')
         if [[ -n "$old_port" ]]; then
-            sed -i "s/\"listen_port\":[[:space:]]*$old_port/\"listen_port\": $new_port/" "$config_file"
+            sed -i "s/"listen_port":[[:space:]]*$old_port/"listen_port": $new_port/" "$config_file"
             if [[ $? -eq 0 ]]; then
                 print_info "端口已更新为: $new_port"
                 log_info "端口已更新为: $new_port"
                 update_success=true
+            else
                 print_error "使用sed更新端口失败"
                 log_error "使用sed更新端口失败"
+            fi
+        else
             print_warning "无法自动更新端口，请手动编辑配置文件"
             log_warning "无法自动更新端口"
         fi
@@ -1460,6 +1479,8 @@ modify_port() {
         if ! manage_service "restart"; then
             print_warning "sing-box 服务重启失败，请手动重启服务"
             log_warning "sing-box 服务重启失败"
+        fi
+    else
         print_error "更新端口失败，配置未更改"
         log_error "更新端口失败，配置未更改"
     fi
@@ -1523,7 +1544,7 @@ modify_uuid() {
         # 如果没有jq，使用sed替换UUID
         # 先尝试匹配带双引号的UUID格式
         if grep -q '"uuid"' "$config_file"; then
-            sed -i "s/\"uuid\": *\"[^"]*\"/\"uuid\": \"$new_uuid\"/g" "$config_file"
+            sed -i "s/\"uuid\": *\"[^\"]*\"/\"uuid\": \"$new_uuid\"/g" "$config_file"
             if [[ $? -eq 0 ]]; then
                 print_info "UUID已更新为: $new_uuid"
                 log_info "UUID已更新为: $new_uuid"
@@ -1600,8 +1621,8 @@ modify_sni() {
     
     # 更新配置文件中的SNI
     local update_success=false
-        # 使用jq更新JSON配置文件中的SNI（如果jq可用）
-        if command -v jq &> /dev/null; then
+    # 使用jq更新JSON配置文件中的SNI（如果jq可用）
+    if command -v jq &> /dev/null; then
             # 使用jq更新SNI
             jq --arg sni "$new_sni" '.inbounds[0].tls.server_name = $sni' "$config_file" > "${config_file}.tmp" && mv "${config_file}.tmp" "$config_file"
             if [[ $? -eq 0 ]]; then
@@ -1616,7 +1637,7 @@ modify_sni() {
             # 如果没有jq，使用sed替换SNI
             # 先尝试匹配带双引号的server_name格式
             if grep -q '"server_name"' "$config_file"; then
-                sed -i "s/\"server_name\": *\"[^"]*\"/\"server_name\": \"$new_sni\"/g" "$config_file"
+                sed -i "s/\"server_name\": *\"[^\"]*\"/\"server_name\": \"$new_sni\"/g" "$config_file"
                 if [[ $? -eq 0 ]]; then
                     print_info "SNI已更新为: $new_sni"
                     log_info "SNI已更新为: $new_sni"
@@ -1723,25 +1744,25 @@ show_client_config() {
         server_ip_v4=$(curl -s ipinfo.io/ip 2>/dev/null)
     fi
     
-    print_info "==================== 客户端配置 ===================="
-    echo "服务器地址 (IPv4): ${server_ip_v4:-N/A}"
+    print_info "==================== Client Configuration ===================="
+    echo "Server Address (IPv4): ${server_ip_v4:-N/A}"
     if [[ -n "$server_ip_v6" ]]; then
-        echo "服务器地址 (IPv6): $server_ip_v6"
+        echo "Server Address (IPv6): $server_ip_v6"
     fi
-    echo "服务器端口: $port"
+    echo "Server Port: $port"
     echo "UUID: $uuid"
     echo "SNI: $sni"
     echo "Short ID: $short_id"
     echo "Public Key: $public_key"
     echo ""
-    echo "配置文件路径: $config_file"
+    echo "Config File Path: $config_file"
     print_info "=================================================="
     
     # 构建VLESS链接（IPv4版本）
     local vless_link_v4="vless://${uuid}@${server_ip_v4}:${port}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=${sni}&fp=chrome&pbk=${public_key}&sid=${short_id}&type=tcp&headerType=none"
     
     echo ""
-    print_info "==================== VLESS链接 (IPv4) ===================="
+    print_info "==================== VLESS Link (IPv4) ===================="
     echo -e "${GREEN}${vless_link_v4}${NC}"
     print_info "========================================================="
     
@@ -1751,15 +1772,15 @@ show_client_config() {
         local vless_link_v6="vless://${uuid}@[${server_ip_v6}]:${port}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=${sni}&fp=chrome&pbk=${public_key}&sid=${short_id}&type=tcp&headerType=none"
         
         echo ""
-        print_info "==================== VLESS链接 (IPv6) ===================="
+        print_info "==================== VLESS Link (IPv6) ===================="
         echo -e "${GREEN}${vless_link_v6}${NC}"
         print_info "========================================================="
     fi
     
     # 提示信息：服务同时支持IPv4和IPv6连接
     echo ""
-    print_info "注意：sing-box服务已配置为同时支持IPv4和IPv6连接"
-    print_info "客户端可以使用任一链接进行连接"
+    print_info "Note: sing-box service is configured to support both IPv4 and IPv6 connections"
+    print_info "Clients can use either link to connect"
     
     echo ""
     
@@ -1794,6 +1815,7 @@ is_port_in_use() {
         if ss -tuln | grep -q ":$port " || ss -tuln6 | grep -q ":$port " || ss -tuln | grep -q ":$port$" || ss -tuln6 | grep -q ":$port$"; then
             log_debug "端口 $port 已被占用 (通过 ss 命令检测)"
             return 0  # 端口已被占用
+        else
             log_debug "端口 $port 未被占用 (通过 ss 命令检测)"
             return 1  # 端口未被占用
         fi
@@ -1803,23 +1825,26 @@ is_port_in_use() {
         if netstat -tuln | grep -q ":$port " || netstat -tuln6 | grep -q ":$port " || netstat -tuln | grep -q ":$port$" || netstat -tuln6 | grep -q ":$port$"; then
             log_debug "端口 $port 已被占用 (通过 netstat 命令检测)"
             return 0  # 端口已被占用
+        else
             log_debug "端口 $port 未被占用 (通过 netstat 命令检测)"
             return 1  # 端口未被占用
-        # 如果都没有，尝试使用lsof
-        if command -v lsof &> /dev/null; then
-            log_debug "使用 lsof 命令检查端口 $port"
-            if lsof -i :$port &> /dev/null || lsof -i6 :$port &> /dev/null; then
-                log_debug "端口 $port 已被占用 (通过 lsof 命令检测)"
-                return 0  # 端口已被占用
-                log_debug "端口 $port 未被占用 (通过 lsof 命令检测)"
-                return 1  # 端口未被占用
-            # 如果所有工具都不可用，返回未占用（保守做法）
-            log_debug "未找到可用的端口检查工具，假设端口 $port 未被占用"
-            return 1
         fi
+    # 如果都没有，尝试使用lsof
+    elif command -v lsof &> /dev/null; then
+        log_debug "使用 lsof 命令检查端口 $port"
+        if lsof -i :$port &> /dev/null || lsof -i6 :$port &> /dev/null; then
+            log_debug "端口 $port 已被占用 (通过 lsof 命令检测)"
+            return 0  # 端口已被占用
+        else
+            log_debug "端口 $port 未被占用 (通过 lsof 命令检测)"
+            return 1  # 端口未被占用
+        fi
+    else
+        # 如果所有工具都不可用，返回未占用（保守做法）
+        log_debug "未找到可用的端口检查工具，假设端口 $port 未被占用"
+        return 1
     fi
 }
-
 # 添加打印成功信息的函数
 print_success() {
     echo -e "${GREEN}$1${NC}"
@@ -1858,6 +1883,7 @@ uninstall_singbox() {
         fi
         
         print_success "sing-box卸载完成!"
+    else
         print_info "取消卸载操作"
     fi
     
@@ -1879,17 +1905,19 @@ view_full_logs() {
         local log_size=$(stat -f%z "$LOG_FILE" 2>/dev/null || stat -c%s "$LOG_FILE" 2>/dev/null || echo "0")
         if [[ "$log_size" -eq 0 ]]; then
             print_info "日志文件为空"
+        else
             print_info "日志文件大小: $(($log_size / 1024)) KB"
             echo "提示: 使用 less 查看时，按 q 键退出查看器"
             echo "----------------------------------------"
             if command -v less &> /dev/null; then
                 less "$LOG_FILE"
+            else
                 cat "$LOG_FILE"
             fi
         fi
+    else
         print_warning "日志文件不存在: $LOG_FILE"
-    fi
-    
+    fi    
     echo ""
     read -p "按回车键返回日志菜单..." dummy
     show_log_menu
@@ -1934,7 +1962,10 @@ monitor_logs() {
         fi
         if command -v tail &> /dev/null; then
             tail -f "$LOG_FILE"
+        else
             print_warning "系统缺少tail命令"
+        fi
+    else
         print_warning "日志文件不存在: $LOG_FILE"
     fi
     
@@ -1961,10 +1992,10 @@ view_config() {
     if command -v jq &> /dev/null; then
         # 使用jq美化显示JSON
         jq . "$config_file"
+    else
         # 如果没有jq，直接显示原始内容
         cat "$config_file"
-    fi
-    
+    fi    
     echo "----------------------------------------"
     read -p "按回车键返回主菜单..." dummy
     show_main_menu
@@ -1994,10 +2025,10 @@ view_current_config() {
     if command -v jq &> /dev/null; then
         # 使用jq美化显示JSON
         jq . "$config_file"
+    else
         # 直接显示文件内容
         cat "$config_file"
-    fi
-    
+    fi    
     echo ""
     print_info "配置文件路径: $config_file"
     echo ""
