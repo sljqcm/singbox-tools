@@ -887,7 +887,6 @@ show_main_menu() {
     print_skyblue "------------------"
     print_purple "0. 退出脚本"
     print_skyblue "------------------"
-    print_skyblue "==============================================="
     read -p "请输入选择: " choice
     
     case $choice in
