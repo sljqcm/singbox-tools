@@ -62,6 +62,10 @@ log_error() {
     log "ERROR" "$1"
 }
 
+log_warn() {
+    log "WARN" "$1"
+}
+
 log_debug() {
     # 仅在调试模式下记录调试信息
     if [[ "${DEBUG_MODE}" == "true" ]]; then
@@ -735,12 +739,47 @@ install_singbox() {
     log_debug "创建临时目录: $temp_dir"
     cd "$temp_dir"
     
-    # 下载sing-box
-    log_debug "执行下载命令: wget -q --show-progress \"$download_url\" -O sing-box.tar.gz"
-    if ! wget -q --show-progress "$download_url" -O sing-box.tar.gz; then
-        log_error "下载 sing-box 失败"
+    # 下载sing-box，优先使用curl以提高稳定性和支持断点续传，备用wget
+    log_debug "执行下载命令: curl -L --progress-bar \"$download_url\" -o sing-box.tar.gz (备用: wget)"
+    local max_retries=3
+    local retry_count=0
+    local download_success=false
+    
+    while [[ $retry_count -lt $max_retries ]]; do
+        # 首先尝试使用curl下载
+        if curl -L --progress-bar --connect-timeout 30 --max-time 300 "$download_url" -o sing-box.tar.gz; then
+            download_success=true
+            break
+        else
+            # 如果curl失败，尝试使用wget作为备用方案
+            if command -v wget &> /dev/null; then
+                log_warn "curl下载失败，尝试使用wget作为备用方案"
+                print_warning "curl下载失败，尝试使用wget作为备用方案"
+                if wget -q --show-progress --timeout=30 --tries=1 "$download_url" -O sing-box.tar.gz; then
+                    download_success=true
+                    break
+                fi
+            fi
+            
+            # 如果两种方法都失败，增加重试计数
+            retry_count=$((retry_count + 1))
+            if [[ $retry_count -lt $max_retries ]]; then
+                log_warn "下载失败，正在重试 ($retry_count/$max_retries)..."
+                print_warning "下载失败，正在重试 ($retry_count/$max_retries)..."
+                sleep 2
+            fi
+        fi
+    done
+    
+    if [[ "$download_success" != "true" ]]; then
+        log_error "下载 sing-box 失败，已重试 $max_retries 次"
         print_error "下载 sing-box 失败"
-        print_error "请检查网络连接或稍后重试"
+        print_error "可能的原因：网络连接不稳定、防火墙限制或GitHub访问问题"
+        print_error "解决建议："
+        print_error "  1. 检查网络连接是否正常"
+        print_error "  2. 尝试使用代理或更换网络环境"
+        print_error "  3. 手动下载文件并放置到适当位置"
+        print_error "  4. 如果问题持续存在，可尝试使用wget替代curl重新运行脚本"
         rm -rf "$temp_dir"
         read -p "按回车键返回主菜单..." dummy
         show_main_menu
@@ -845,8 +884,11 @@ EOF
     fi
     
     log_info "sing-box 安装完成"
-    print_info "sing-box 安装完成"
+    print_success "sing-box 安装完成"
     
+    print_info "按任意键返回主菜单..."
+    read -n 1 -s -r -p ""
+    echo
     show_main_menu
 }
 
@@ -989,10 +1031,10 @@ show_config_menu() {
             modify_sni
             ;;
         4)
-            backup_config
+            backup_config_from_config_menu
             ;;
         5)
-            restore_config
+            restore_config_from_config_menu
             ;;
         6)
             view_current_config
@@ -1331,21 +1373,27 @@ manage_service() {
 # 启动sing-box服务（菜单选项）
 start_singbox_service() {
     manage_service "start"
-    sleep 2
+    print_info "按任意键返回主菜单..."
+    read -n 1 -s -r -p ""
+    echo
     show_main_menu
 }
 
 # 停止sing-box服务（菜单选项）
 stop_singbox_service() {
     manage_service "stop"
-    sleep 2
+    print_info "按任意键返回主菜单..."
+    read -n 1 -s -r -p ""
+    echo
     show_main_menu
 }
 
 # 重启sing-box服务（菜单选项）
 restart_singbox_service() {
     manage_service "restart"
-    sleep 2
+    print_info "按任意键返回主菜单..."
+    read -n 1 -s -r -p ""
+    echo
     show_main_menu
 }
 
@@ -1568,7 +1616,10 @@ modify_uuid() {
         log_info "UUID已更新为: $new_uuid"
         
         # 重启服务使更改生效
-        restart_singbox_service
+        manage_service "restart"
+        print_info "按任意键返回配置菜单..."
+        read -n 1 -s -r -p ""
+        echo
     else
         print_error "更新UUID失败"
         log_error "更新UUID失败"
@@ -1627,7 +1678,10 @@ modify_sni() {
         log_info "SNI已更新为: $new_sni"
         
         # 重启服务使更改生效
-        restart_singbox_service
+        manage_service "restart"
+        print_info "按任意键返回配置菜单..."
+        read -n 1 -s -r -p ""
+        echo
     else
         print_error "更新SNI失败"
         log_error "更新SNI失败"
@@ -1819,6 +1873,24 @@ print_success() {
     echo -e "${GREEN}$1${NC}"
 }
 
+# 从配置菜单调用的备份配置函数
+backup_config_from_config_menu() {
+    backup_config
+    print_info "按任意键返回配置菜单..."
+    read -n 1 -s -r -p ""
+    echo
+    show_config_menu
+}
+
+# 从配置菜单调用的恢复配置函数
+restore_config_from_config_menu() {
+    restore_config
+    print_info "按任意键返回配置菜单..."
+    read -n 1 -s -r -p ""
+    echo
+    show_config_menu
+}
+
 # 卸载sing-box
 uninstall_singbox() {
     print_warning "注意: 此操作将完全删除sing-box及其所有配置文件!"
@@ -1827,8 +1899,8 @@ uninstall_singbox() {
     if [[ "$confirm" == "y" ]] || [[ "$confirm" == "Y" ]]; then
         print_info "开始卸载sing-box..."
         
-        # 停止服务
-        stop_singbox_service
+        # 停止服务（不使用stop_singbox_service函数，避免直接跳转）
+        manage_service "stop"
         
         # 删除配置文件和目录
         if [[ -d "$CONFIG_DIR" ]]; then
@@ -1849,12 +1921,14 @@ uninstall_singbox() {
             print_info "已删除systemd服务文件"
         fi
         
-        print_info "sing-box卸载完成!"
+        print_success "sing-box卸载完成!"
     else
         print_info "取消卸载操作"
     fi
     
-    read -p "按回车键返回主菜单..." dummy
+    print_info "按任意键返回主菜单..."
+    read -n 1 -s -r -p ""
+    echo
     show_main_menu
 }
 
@@ -2021,14 +2095,21 @@ backup_config() {
     cp "$CONFIG_FILE" "$backup_file"
     
     if [[ $? -eq 0 ]]; then
-        print_info "配置文件已备份到: $backup_file"
+        print_success "配置文件已备份到: $backup_file"
         log_info "配置文件已备份到: $backup_file"
         log_debug "备份完成"
     else
         log_error "备份配置文件失败"
         print_error "备份配置文件失败"
+        read -p "按回车键返回备份菜单..." dummy
+        show_backup_menu
         return 1
     fi
+    
+    print_info "按任意键返回备份菜单..."
+    read -n 1 -s -r -p ""
+    echo
+    show_backup_menu
 }
 
 # 恢复配置文件
@@ -2079,19 +2160,23 @@ restore_config() {
         
         # 停止服务
         log_debug "停止sing-box服务"
-        stop_singbox_service
+        manage_service "stop"
         
         # 复制备份文件到配置文件位置
         log_debug "复制备份文件到配置文件位置: cp \"$selected_backup\" \"$CONFIG_FILE\""
         cp "$selected_backup" "$CONFIG_FILE"
         
         if [[ $? -eq 0 ]]; then
-            print_info "配置文件已从 $selected_backup 恢复"
+            print_success "配置文件已从 $selected_backup 恢复"
             log_info "配置文件已从 $selected_backup 恢复"
             
             # 重启服务
             log_debug "重启sing-box服务"
-            start_singbox_service
+            manage_service "start"
+            print_info "按任意键返回备份菜单..."
+            read -n 1 -s -r -p ""
+            echo
+            show_backup_menu
         else
             log_error "恢复配置文件失败"
             print_error "恢复配置文件失败"
