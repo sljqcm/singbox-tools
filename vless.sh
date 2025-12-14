@@ -845,11 +845,10 @@ show_main_menu() {
     clear
     echo -e "${BLUE}===============================================${NC}"
     echo -e "${BLUE}          sing-box 一键安装管理脚本${NC}"
-    echo -e "${SKYBLUE}          作者: $AUTHOR${NC}"
-    echo -e "${SKYBLUE}          版本: $VERSION${NC}"
+    echo -e "${GREEN}          作者: $AUTHOR${NC}"
+    echo -e "${BROWN}          版本: $VERSION${NC}"
     echo -e "${SKYBLUE}          sing-box版本: $SINGBOX_VERSION${NC}"
     echo -e "${BLUE}===============================================${NC}"
-    echo ""
     echo ""
     # 检查sing-box是否已安装
     local singbox_installed="未安装"
