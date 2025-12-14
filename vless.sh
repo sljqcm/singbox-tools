@@ -10,7 +10,7 @@
 
 # 项目信息常量
 AUTHOR="LittleDoraemon"
-VERSION="v1.0.2"
+VERSION="v1.0.3"
 
 # 调试模式（可通过环境变量 DEBUG_MODE=true 启用）
 DEBUG_MODE=${DEBUG_MODE:-false}
@@ -748,6 +748,7 @@ install_singbox() {
         if curl -L --http1.1 --progress-bar --connect-timeout 30 --max-time 300 "$download_url" -o sing-box; then
             download_success=true
             break
+        else
             log_debug "curl下载失败，退出码: $?"
             # 如果curl失败，尝试使用wget作为备用方案
             if command -v wget &> /dev/null; then
@@ -757,7 +758,10 @@ install_singbox() {
                 if wget -q --show-progress --timeout=30 --tries=1 --random-wait "$download_url" -O sing-box; then
                     download_success=true
                     break
+                else
                     log_debug "wget下载失败，退出码: $?"
+                fi
+            else
                 log_debug "wget命令不可用"
             fi
             
