@@ -33,6 +33,7 @@ BACKUP_DIR="$CONFIG_DIR/backup"
 # Unicode符号常量
 CHECK_MARK='\u2705'  # 白色对勾✅
 CROSS_MARK='\u274C'  # 红色叉号❌
+WARNING_SIGN='\u26A0'  # 警告符号⚠️
 
 # 颜色定义常量
 RED='\033[0;31m'
@@ -235,23 +236,24 @@ check_system() {
 # 检查系统是否支持IPv6
 # 
 # 设计说明:
-# 该函数通过两种方式检查IPv6支持，确保在不同环境下都能正确检测:
+# 该函数通过多种方式检查IPv6支持，确保在不同环境下都能正确检测:
 # 1. 首先检查 /proc/net/if_inet6 文件是否存在且不为空（Linux系统标准方法）
 # 2. 备选使用 ip -6 addr show 命令检查是否有IPv6接口（更通用的方法）
+# 3. 进一步验证IPv6功能是否真正可用
 # 
-# 这种双重检查机制确保了在各种Linux发行版和Unix系统中都能准确检测IPv6支持
+# 这种多重检查机制确保了在各种Linux发行版和Unix系统中都能准确检测IPv6支持
 check_ipv6_support() {
     # 检查/proc/net/if_inet6文件是否存在且不为空
     if [[ -f /proc/net/if_inet6 ]] && [[ -s /proc/net/if_inet6 ]]; then
-        echo -e "${GREEN}${CHECK_MARK}${NC} IPv6支持检查: 通过"
-        return 0
+        # 进一步验证IPv6功能是否真正可用
+        if command -v ip &> /dev/null && ip -6 addr show 2>/dev/null | grep -q "inet6"; then
+            echo -e "${GREEN}${CHECK_MARK}${NC} IPv6支持检查: 通过"
+            return 0
+        fi
     fi
-    # 检查是否有IPv6接口
-    if ip -6 addr show 2>/dev/null | grep -q "inet6"; then
-        echo -e "${GREEN}${CHECK_MARK}${NC} IPv6支持检查: 通过"
-        return 0
-    fi
-    echo -e "${RED}${CROSS_MARK}${NC} IPv6支持检查: 未通过 - 系统不支持IPv6"
+    
+    # 如果以上检查都失败，说明系统不支持IPv6
+    echo -e "${YELLOW}${WARNING_SIGN}${NC} IPv6支持检查: 未通过 - 系统不支持IPv6"
     return 1
 }
 
@@ -1220,8 +1222,6 @@ main_install_process() {
     
     log_info "sing-box一键下载并安装完成！"
     print_info "sing-box一键下载并安装完成！"
-    read -p "按回车键返回主菜单..." dummy
-    show_main_menu
 }
 
 # 启动服务
