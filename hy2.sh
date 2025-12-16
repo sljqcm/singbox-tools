@@ -416,7 +416,25 @@ get_info() {
   if [ -n "$NODE_NAME" ]; then
       node_name="$NODE_NAME"
   else
-      node_name=$(curl -s --max-time 2 https://ipapi.co/json | tr -d '\n[:space:]' | sed 's/.*"country_code":"\([^"]*\)".*"org":"\([^"]*\)".*/\1-\2/' | sed 's/ /_/g' 2>/dev/null || echo "$hostname")
+      # ==============================
+      # 获取节点名称（增强版，带 fallback）
+      # ==============================
+      node_name=$(
+          # 1) 尝试 ipapi.co（带速率限制保护）
+          curl -fs --max-time 3 https://ipapi.co/json 2>/dev/null | \
+          sed -n 's/.*"country_code":"\([^\"]*\)".*"org":"\([^\"]*\)".*/\1-\2/p' | \
+          sed 's/ /_/g'
+      )
+
+      # 2) 如果 ipapi.co 不可用，尝试 ip.sb + ipinfo.io/org
+      if [ -z "$node_name" ]; then
+          country=$(curl -fs --max-time 3 ip.sb/country 2>/dev/null | tr -d '\r\n')
+          org=$(curl -fs --max-time 3 ipinfo.io/org 2>/dev/null | awk '{$1=""; print $0}' | sed 's/^ //; s/ /_/g')
+          if [ -n "$country" ] && [ -n "$org" ]; then
+              node_name="$country-$org"
+          fi
+      fi
+
       [ -z "$node_name" ] && node_name="$DEFAULT_NODE_NAME"
   fi
 
@@ -747,9 +765,11 @@ change_config() {
     skyblue "------------"
     green "2. 修改UUID"
     skyblue "------------"
-    green "3. 添加Hysteria2端口跳跃"
+    green "3. 修改节点名称"
     skyblue "------------"
-    green "4. 删除Hysteria2端口跳跃"
+    green "4. 添加Hysteria2端口跳跃"
+    skyblue "------------"
+    green "5. 删除Hysteria2端口跳跃"
     skyblue "------------"
     purple "0. 返回主菜单"
     skyblue "------------"
@@ -777,7 +797,22 @@ change_config() {
             while IFS= read -r line; do yellow "$line"; done < ${work_dir}/url.txt
             green "\nUUID已修改为：${purple}${new_uuid}${re} ${green}请更新订阅或手动更改所有节点的UUID${re}\n"
             ;;
-        3)  
+        3)
+            reading "\n请输入新的节点名称: " new_node_name
+            [ -z "$new_node_name" ] && new_node_name="$DEFAULT_NODE_NAME"
+            
+            # 更新url.txt中的节点名称
+            sed -i "s/\(hysteria2://[^#]*#\).*/\1$new_node_name/" $client_dir
+            
+            # 重新生成订阅文件
+            base64 -w0 $client_dir > /etc/sing-box/sub.txt
+            
+            restart_singbox
+            
+            while IFS= read -r line; do yellow "$line"; done < ${work_dir}/url.txt
+            green "\n节点名称已修改为：${purple}${new_node_name}${re} ${green}请更新订阅或手动更改节点名称${re}\n"
+            ;;
+        4)  
             # 交互式获取端口范围（不考虑外界环境变量）
             while true; do
                 purple "端口跳跃需确保跳跃区间的端口没有被占用，nat鸡请注意可用端口范围，否则可能造成节点不通\n"
@@ -844,7 +879,7 @@ EOF
             while IFS= read -r line; do yellow "$line"; done < ${work_dir}/url.txt
             green "\nhysteria2端口跳跃已开启,跳跃端口为：${purple}$min_port-$max_port${re} ${green}请更新订阅或手动复制以上hysteria2节点${re}\n"
             ;;
-        4)  
+        5)  
             iptables -t nat -F PREROUTING  > /dev/null 2>&1
             command -v ip6tables &> /dev/null && ip6tables -t nat -F PREROUTING  > /dev/null 2>&1
             if command_exists rc-service 2>/dev/null; then
