@@ -1229,8 +1229,7 @@ get_user_port() {
     
     while true; do
         # 提示用户输入端口
-        echo -n "请输入端口号 (1-65535)，或按回车跳过使用随机端口: "
-        read user_port
+        reading "请输入端口号 (1-65535)，或按回车跳过使用随机端口: ",user_port
         
         # 如果用户直接按回车，使用随机端口
         if [ -z "$user_port" ]; then
@@ -1272,9 +1271,10 @@ get_user_uuid() {
     
     while true; do
         # 提示用户输入UUID
-        echo -n "请输入UUID，或按回车跳过使用随机UUID: "
-        read user_uuid
+        echo  "请输入UUID，或按回车跳过使用随机UUID: "
 
+        reading "请输入UUID，或按回车跳过使用随机UUID: ",user_uuid
+ 
         # 如果用户直接按回车，生成随机UUID
         if [ -z "$user_uuid" ]; then
             echo "用户选择使用随机UUID"
