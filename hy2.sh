@@ -284,41 +284,45 @@ install_singbox() {
             ;;
     esac
 
-    FILE="sing-box-${SINGBOX_VERSION}-linux-${ARCH}.tar.gz"
-    DOWNLOAD_URL="https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/${FILE}"
+    FILENAME="sing-box-${VERSION}-linux-${ARCH}.tar.gz"
+    URL="https://github.com/SagerNet/sing-box/releases/download/v${VERSION}/${FILENAME}"
 
-    echo "Downloading ${FILE}..."
-    curl -fsSL "$DOWNLOAD_URL" -o "$FILE"
+    echo "Downloading $FILENAME..."
+    curl -L -o "$FILENAME" "$URL"
 
-    echo "Extracting..."
-    tar -xzf "$FILE"
-
-    # 进入正确目录
-    cd "sing-box-${SINGBOX_VERSION}-linux-${ARCH}"
-
- 
-    # 查找解压出来的目录
-    extracted_dir=$(find . -maxdepth 1 -type d -name "sing-box-*")
-
-
-    # 创建工作目录
-    mkdir -p "${work_dir}"
-
-   # 下载完成并解压后，假设当前目录有 ./sing-box，注意：不同的singbox版本，目录不一样哦
-    chmod +x sing-box
-
-    # 如果目录存在，则进入
-    if [ -n "$extracted_dir" ]; then
-        echo "进入解压目录: $extracted_dir"
-        # 将可执行文件移动到你定义的 work_dir
-        mv sing-box "${work_dir}/${server_name}"
-        echo "可执行文件已安装到：${work_dir}/${server_name}"
-    else
-        echo "❌ 未找到解压目录 sing-box-*"
+    if [ ! -f "$FILENAME" ]; then
+        echo "❌ 下载失败: $URL"
         exit 1
     fi
 
+    # ---- 3. 解压 ----
+    echo "Extracting..."
+    tar -xzf "$FILENAME"
 
+    # 自动匹配解压目录，例如：sing-box-1.12.12-linux-amd64
+    extracted_dir=$(find . -maxdepth 1 -type d -name "sing-box-*")
+
+    if [ -z "$extracted_dir" ]; then
+        echo "❌ 解压失败：未找到解压目录 sing-box-*"
+        exit 1
+    fi
+
+    echo "进入解压目录: $extracted_dir"
+    cd "$extracted_dir" || exit 1
+
+    # ---- 4. 找到可执行文件 sing-box ----
+    if [ ! -f "sing-box" ]; then
+        echo "❌ 未找到可执行文件 sing-box"
+        exit 1
+    fi
+
+    mkdir -p "${work_dir}"
+
+    # ---- 5. 移动到目标路径 ----
+    mv sing-box "${work_dir}/${server_name}"
+    chmod +x "${work_dir}/${server_name}"
+
+    echo "✔ Sing-box 已安装到：${work_dir}/${server_name}"
 
     # 检查是否通过环境变量提供了参数
     local use_env_vars=false
