@@ -14,7 +14,7 @@ SINGBOX_VERSION="1.12.13"
 
 # 项目信息常量
 AUTHOR="LittleDoraemon"
-VERSION="v1.0.1"
+VERSION="v1.0.10"
 
 # 定义颜色
 re="\033[0m"
@@ -55,7 +55,7 @@ export hy2_port=${PORT:-$(shuf -i 1-65535 -n 1)}
 # 默认节点名称常量
 # 根据文件名自动判断协议类型
 if [[ "${0##*/}" == *"hy2"* || "${0##*/}" == *"hysteria2"* ]]; then
-    DEFAULT_NODE_NAME="$AUTHOR-hysteria2"
+    DEFAULT_NODE_NAME="$AUTHOR-hy2"
 else
     DEFAULT_NODE_NAME="$AUTHOR"
 fi
@@ -346,7 +346,7 @@ install_singbox() {
                 return 1  # 停止继续执行
             fi
         else
-            red "错误：RANGE_PORTS格式无效，应为 起始端口-结束端口 (例如: 20000-50000)"
+            red "错误：RANGE_PORTS格式无效，应为 起始端口-结束端口 (例如: 1-65535)"
             unset RANGE_PORTS  # 清除无效的 RANGE_PORTS
             return 1  # 停止继续执行
         fi
@@ -425,11 +425,11 @@ install_singbox() {
   "route": {
     "final": "direct"
   }
-}
+} 
 EOF
 
-
-} 
+}
+ 
 
 
 # debian/ubuntu/centos 守护进程
@@ -488,7 +488,7 @@ EOF
 
 # 生成节点和订阅链接
 get_info() {  
-  yellow "\nip检测中,请稍等...\n"
+  yellow "\n ip检测中,请稍等...\n"
   server_ip=$(get_realip)
   clear
   
@@ -523,31 +523,36 @@ get_info() {
   if [ -n "$RANGE_PORTS" ] && [[ "$RANGE_PORTS" =~ ^([0-9]+)-([0-9]+)$ ]]; then
       min_port="${BASH_REMATCH[1]}"
       max_port="${BASH_REMATCH[2]}"
-      cat > ${work_dir}/url.txt <<EOF
-hysteria2://${uuid}@${server_ip}:${hy2_port}/?insecure=1&alpn=h3&obfs=none&mport=${hy2_port},${min_port}-${max_port}#${node_name}
-EOF
+      hysteria2_url="hysteria2://${uuid}@${server_ip}:${hy2_port}/?insecure=1&alpn=h3&obfs=none&mport=${hy2_port},${min_port}-${max_port}#${node_name}"
   else
-      cat > ${work_dir}/url.txt <<EOF
-hysteria2://${uuid}@${server_ip}:${hy2_port}/?insecure=1&alpn=h3&obfs=none#${node_name}
-EOF
+      hysteria2_url="hysteria2://${uuid}@${server_ip}:${hy2_port}/?insecure=1&alpn=h3&obfs=none#${node_name}"
   fi
-echo ""
-while IFS= read -r line; do echo -e "${purple}$line"; done < ${work_dir}/url.txt
-base64 -w0 ${work_dir}/url.txt > ${work_dir}/sub.txt
-chmod 644 ${work_dir}/sub.txt
-yellow "\n温馨提醒：需打开V2rayN或其他软件里的 "跳过证书验证"，或将节点的Insecure或TLS里设置为"true"\n"
-green "V2rayN,Shadowrocket,Nekobox,Loon,Karing,Sterisand订阅链接：http://${server_ip}:${nginx_port}/${password}\n"
-generate_qr "http://${server_ip}:${nginx_port}/${password}"
-yellow "\n=========================================================================================="
-green "\n\nClash,Mihomo系列订阅链接：https://sublink.eooce.com/clash?config=http://${server_ip}:${nginx_port}/${password}\n"
-generate_qr "https://sublink.eooce.com/clash?config=http://${server_ip}:${nginx_port}/${password}"
-yellow "\n=========================================================================================="
-green "\n\nSing-box订阅链接：https://sublink.eooce.com/singbox?config=http://${server_ip}:${nginx_port}/${password}\n"
-generate_qr "https://sublink.eooce.com/singbox?config=http://${server_ip}:${nginx_port}/${password}"
-yellow "\n=========================================================================================="
-green "\n\nSurge订阅链接：https://sublink.eooce.com/surge?config=http://${server_ip}:${nginx_port}/${password}\n"
-generate_qr "https://sublink.eooce.com/surge?config=http://${server_ip}:${nginx_port}/${password}"
-yellow "\n==========================================================================================\n"
+  
+   # 统一写入url.txt文件
+    echo "$hysteria2_url" > ${work_dir}/url.txt
+    echo ""
+    while IFS= read -r line; do echo -e "${purple}$line"; done < ${work_dir}/url.txt
+
+    base64 -w0 ${work_dir}/url.txt > ${work_dir}/sub.txt
+
+    chmod 644 ${work_dir}/sub.txt
+
+    yellow "\n温馨提醒：需打开V2rayN或其他软件里的 "跳过证书验证"，或将节点的Insecure或TLS里设置为"true"\n"
+    green "V2rayN,Shadowrocket,Nekobox,Loon,Karing,Sterisand订阅链接：http://${server_ip}:${nginx_port}/${password}\n"
+    generate_qr "http://${server_ip}:${nginx_port}/${password}"
+    yellow "\n=========================================================================================="
+
+    green "\n\nClash,Mihomo系列订阅链接：https://sublink.eooce.com/clash?config=http://${server_ip}:${nginx_port}/${password}\n"
+    generate_qr "https://sublink.eooce.com/clash?config=http://${server_ip}:${nginx_port}/${password}"
+    yellow "\n=========================================================================================="
+
+    green "\n\nSing-box订阅链接：https://sublink.eooce.com/singbox?config=http://${server_ip}:${nginx_port}/${password}\n"
+    generate_qr "https://sublink.eooce.com/singbox?config=http://${server_ip}:${nginx_port}/${password}"
+    yellow "\n=========================================================================================="
+
+    green "\n\nSurge订阅链接：https://sublink.eooce.com/surge?config=http://${server_ip}:${nginx_port}/${password}\n"
+    generate_qr "https://sublink.eooce.com/surge?config=http://${server_ip}:${nginx_port}/${password}"
+    yellow "\n==========================================================================================\n"
 }
 
 # nginx订阅配置
@@ -936,7 +941,7 @@ start() {
 }
 EOF
 
-                chmod +x /etc/init.d/iptables && rc-update add iptables default && /etc/init.d/iptables start
+            chmod +x /etc/init.d/iptables && rc-update add iptables default && /etc/init.d/iptables start
             elif [ -f /etc/debian_version ]; then
                 DEBIAN_FRONTEND=noninteractive apt install -y iptables-persistent > /dev/null 2>&1 && netfilter-persistent save > /dev/null 2>&1 
                 systemctl enable netfilter-persistent > /dev/null 2>&1 && systemctl start netfilter-persistent > /dev/null 2>&1
@@ -979,13 +984,14 @@ EOF
         *)  red "无效的选项！" ;; 
     esac
 }
+
 disable_open_sub() {
     local singbox_status=$(check_singbox 2>/dev/null)
     local singbox_installed=$?
     
     if [ $singbox_installed -eq 2 ]; then
         yellow "sing-box 尚未安装！"
-        sleep 1
+        sleep 1  #todo 按任意键回菜单
         menu
         return
     fi
@@ -1360,9 +1366,9 @@ menu() {
    echo ""
    blue "==============================================="
    blue "          sing-box 一键安装管理脚本"
-   blue "          （Hysteria2版）"
-   skyblue "          作者: $AUTHOR"
-   yellow "          版本: $VERSION"
+   blue "         （Hysteria2版）"
+   skyblue "       作者: $AUTHOR"
+   yellow "        版本: $VERSION"
    blue "==============================================="
    echo ""
    green "老王的Github地址: ${purple}https://github.com/eooce/sing-box${re}\n"
@@ -1494,7 +1500,6 @@ generate_qr() {
 }
 
 # 启动主循环
-# 启动主循环
 main() {
     is_interactive_mode
     if [ $? -eq 0 ]; then
@@ -1512,4 +1517,3 @@ main() {
 
 # 调用主函数
 main
-
