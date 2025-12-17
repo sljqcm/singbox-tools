@@ -261,13 +261,8 @@ allow_port() {
 install_singbox() {
     clear
     purple "正在准备sing-box中，请稍后..."
-    # 检查并安装必要的依赖包
-    if ! command_exists tar; then
-        manage_packages install tar
-    fi
 
     # 判断系统架构
-
     ARCH=$(uname -m)
     case "$ARCH" in
         x86_64) ARCH="amd64" ;;
@@ -287,16 +282,18 @@ install_singbox() {
     FILENAME="sing-box-${SINGBOX_VERSION}-linux-${ARCH}.tar.gz"
     URL="https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/${FILENAME}"
 
-
     # 调用singbox安装函数
     install_sing_box_then_clear "$URL" "$FILENAME" "$work_dir" "$server_name"
 
     # 检查是否通过环境变量提供了参数
-    local use_env_vars=false
-    if [ -n "$PORT" ] || [ -n "$UUID" ] || [ -n "$RANGE_PORTS" ]; then
-        use_env_vars=true
+    is_interactive_mode
+    # 转换返回值逻辑：0表示交互式模式，1表示非交互式模式
+    if [ $? -eq 0 ]; then
+        local use_env_vars=false
+    else
+        local use_env_vars=true
     fi
-    
+
     # 打印是否是交互式模式
     if [ "$use_env_vars" = true ]; then
         echo "当前运行模式: 非交互式模式"
@@ -322,7 +319,7 @@ install_singbox() {
 
     # 生成随机端口和UUID
     nginx_port=$(($hy2_port + 1)) 
-    
+
     # 获取UUID
     if [ -n "$UUID" ]; then
         uuid=$UUID
@@ -355,10 +352,9 @@ install_singbox() {
         fi
     fi
 
-    
     # 确保工作目录存在
     [ ! -d "${work_dir}" ] && mkdir -p "${work_dir}"
-    
+
     # 生成自签名证书
     openssl ecparam -genkey -name prime256v1 -out "${work_dir}/private.key"
     openssl req -new -x509 -days 3650 -key "${work_dir}/private.key" -out "${work_dir}/cert.pem" -subj "/CN=bing.com"
@@ -369,8 +365,8 @@ install_singbox() {
     # 检测网络类型并设置DNS策略
     dns_strategy=$(ping -c 1 -W 3 8.8.8.8 >/dev/null 2>&1 && echo "prefer_ipv4" || (ping -c 1 -W 3 2001:4860:4860::8888 >/dev/null 2>&1 && echo "prefer_ipv6" || echo "prefer_ipv4"))
 
-   # 生成配置文件 (只保留Hysteria2协议)
-cat > "${config_dir}" << EOF
+    # 生成配置文件 (只保留Hysteria2协议)
+    cat > "${config_dir}" << EOF
 {
   "log": {
     "disabled": false,
@@ -432,10 +428,10 @@ cat > "${config_dir}" << EOF
 }
 EOF
 
-    # RANGE_PORTS的处理已移到install_singbox函数外部
-    
 
-}
+} 
+
+
 # debian/ubuntu/centos 守护进程
 main_systemd_services() {
     cat > /etc/systemd/system/sing-box.service << EOF
@@ -1141,10 +1137,19 @@ is_interactive_mode() {
 # 非交互式模式下的快速安装函数
 quick_install() {
     # 直接安装sing-box，使用环境变量参数
-    manage_packages install nginx jq openssl lsof coreutils
+    install_common_packages
+
     install_singbox
     
-    # 启动服务
+   start_service_after_finish_sb
+# 安装共同依赖包
+install_common_packages() {
+    manage_packages install tar nginx jq openssl lsof coreutils tar
+}
+
+
+start_service_after_finish_sb(){
+        # 启动服务
     if command_exists systemctl; then
         main_systemd_services
     elif command_exists rc-update; then
@@ -1163,6 +1168,9 @@ quick_install() {
     add_nginx_conf
 }
 
+
+
+
 # 主循环
 main_loop() {
     while true; do
@@ -1173,25 +1181,9 @@ main_loop() {
                 if [ ${check_singbox} -eq 0 ]; then
                     yellow "sing-box 已经安装！\n"
                 else
-                    manage_packages install nginx jq openssl lsof coreutils
-                    install_singbox
-                    
-                    if command_exists systemctl; then
-                        main_systemd_services
-                    elif command_exists rc-update; then
-                        alpine_openrc_services
-                        change_hosts
-                        rc-service sing-box restart
-                    else
-                        red "系统不支持"
-                        exit 1 
-                    fi
-
-                    sleep 5
-                    # 处理RANGE_PORTS环境变量
-                    handle_range_ports
-                    get_info
-                    add_nginx_conf
+                    install_common_packages
+                    install_singbox 
+                    start_service_after_finish_sb
                 fi
                ;;
             2) uninstall_singbox ;;
@@ -1208,8 +1200,6 @@ main_loop() {
        esac
        read -n 1 -s -r -p $'\033[1;91m按任意键返回...\033[0m'
     done
-}
-
 }
 
 reading_input() {
@@ -1370,7 +1360,7 @@ menu() {
    echo ""
    blue "==============================================="
    blue "          sing-box 一键安装管理脚本"
-   blue "          （Hysteria2精简版）"
+   blue "          （Hysteria2版）"
    skyblue "          作者: $AUTHOR"
    yellow "          版本: $VERSION"
    blue "==============================================="
@@ -1382,37 +1372,24 @@ menu() {
    green "1. 安装sing-box(Hysteria2)"
    red "2. 卸载sing-box"
    echo "==============="
-   green "3. sing-box管理"
-   echo  "==============="
+   green  "3. sing-box管理"
    green  "4. 查看节点信息"
+   echo  "==============="
    green  "5. 修改节点配置"
    green  "6. 管理节点订阅"
    echo  "==============="
    purple "7. 老王ssh综合工具箱"
    echo  "==============="
    red "0. 退出脚本"
-   echo "==========="
+   echo  "==============="
    reading "请输入选择(0-7): " choice
    echo ""
 }
+
 # 捕获 Ctrl+C 退出信号
 trap 'red "已取消操作"; exit' INT
 
-# 启动主循环
-main() {
-    is_interactive_mode
-    if [ $? -eq 0 ]; then
-        # 交互式模式 - 显示菜单
-        main_loop
-    else
-        # 非交互式模式 - 快速安装
-        quick_install
-        # 安装完成后提示用户按任意键进入主循环菜单
-        green "\n非交互式安装已完成！"
-        read -n 1 -s -r -p $'\033[1;91m按任意键进入主菜单...\033[0m'
-        main_loop
-    fi
-}
+
 
 
 # 定义一个函数来完成下载、解压、安装和清理的整个过程
@@ -1494,13 +1471,14 @@ install_sing_box_then_clear() {
     rm -rf "$extracted_dir"
 
     echo "✔ 清理完成，所有临时文件已清理。"
+
     cd "$initial_dir"  # 恢复到最初的目录
 }
 
 generate_qr() {
     local TEXT="$1"
 
-    echo
+    echo ""
     echo "========================================"
     echo "📱 请手机扫码以下二维码链接（全球可用）："
     encoded=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$TEXT")
@@ -1515,6 +1493,23 @@ generate_qr() {
     echo "$TEXT"
 }
 
+# 启动主循环
+# 启动主循环
+main() {
+    is_interactive_mode
+    if [ $? -eq 0 ]; then
+        # 交互式模式 - 显示菜单
+        main_loop
+    else
+        # 非交互式模式 - 快速安装
+        quick_install
+        # 安装完成后提示用户按任意键进入主循环菜单
+        green "\n非交互式安装已完成！"
+        read -n 1 -s -r -p $'\033[1;91m按任意键进入主菜单...\033[0m'
+        main_loop
+    fi
+}
 
 # 调用主函数
 main
+
