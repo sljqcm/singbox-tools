@@ -1208,13 +1208,19 @@ main_loop() {
     done
 }
 
+reading_input_port() {
+    echo -n "$1"
+    read input_value
+    printf -v "$2" "%s" "$input_value"
+}
+
 # 获取用户输入的端口（确保端口未被占用）
 get_user_port() {
-    echo "开始调用 get_user_port函数"
+    echo "Starting get_user_port function"
     local user_port
     
     while true; do
-        reading "请输入端口号 (1-65535)，或按回车跳过使用随机端口: " user_port
+        reading_input_port "请输入端口号 (1-65535)，或按回车跳过使用随机端口: " user_port
         
         # 如果用户直接按回车，使用随机端口
         if [ -z "$user_port" ]; then
