@@ -544,16 +544,16 @@ base64 -w0 ${work_dir}/url.txt > ${work_dir}/sub.txt
 chmod 644 ${work_dir}/sub.txt
 yellow "\n温馨提醒：需打开V2rayN或其他软件里的 "跳过证书验证"，或将节点的Insecure或TLS里设置为"true"\n"
 green "V2rayN,Shadowrocket,Nekobox,Loon,Karing,Sterisand订阅链接：http://${server_ip}:${nginx_port}/${password}\n"
-show_qr "http://${server_ip}:${nginx_port}/${password}"
+generate_qr "http://${server_ip}:${nginx_port}/${password}"
 yellow "\n=========================================================================================="
 green "\n\nClash,Mihomo系列订阅链接：https://sublink.eooce.com/clash?config=http://${server_ip}:${nginx_port}/${password}\n"
-show_qr "https://sublink.eooce.com/clash?config=http://${server_ip}:${nginx_port}/${password}"
+generate_qr "https://sublink.eooce.com/clash?config=http://${server_ip}:${nginx_port}/${password}"
 yellow "\n=========================================================================================="
 green "\n\nSing-box订阅链接：https://sublink.eooce.com/singbox?config=http://${server_ip}:${nginx_port}/${password}\n"
-show_qr "https://sublink.eooce.com/singbox?config=http://${server_ip}:${nginx_port}/${password}"
+generate_qr "https://sublink.eooce.com/singbox?config=http://${server_ip}:${nginx_port}/${password}"
 yellow "\n=========================================================================================="
 green "\n\nSurge订阅链接：https://sublink.eooce.com/surge?config=http://${server_ip}:${nginx_port}/${password}\n"
-show_qr "https://sublink.eooce.com/surge?config=http://${server_ip}:${nginx_port}/${password}"
+generate_qr "https://sublink.eooce.com/surge?config=http://${server_ip}:${nginx_port}/${password}"
 yellow "\n==========================================================================================\n"
 }
 
@@ -1419,60 +1419,6 @@ generate_qr() {
     echo "$TEXT"
 }
 
-
-print_color_qr() {
-
-    if ! command_exists qrencode; then
-      manage_packages install qrencode
-    fi
-
-    local data="$1"
-
-    # 黑白方块颜色（你可以修改颜色）
-    local black="\e[40m  \e[0m"
-    local white="\e[47m  \e[0m"
-
-    echo "🔳 生成彩色二维码如下："
-
-    qrencode -t ASCII -o - "$data" | while IFS= read -r line; do
-        # 将二维码字符替换为彩色输出
-        line="${line//#/░}"       # 中间灰点占位
-        line="${line//?/░}"
-
-        # 替换为真正黑白块
-        line="${line//░/${black}}"
-        line="${line// /${white}}"
-
-        echo -e "$line"
-    done
-}
-
-show_qr() {
-    local TEXT="$1"
-
-    echo
-    echo "========================================"
-    echo "📱 请手机扫码以下二维码链接（全球可用）："
-
-    # 如果终端可显示 PNG → 优先使用 generate_qr
-    if command -v imgcat >/dev/null 2>&1; then
-        generate_qr "$TEXT"
-        return
-    elif command -v viu >/dev/null 2>&1; then
-        generate_qr "$TEXT"
-        return
-    fi
-
-    # 否则 → 自动使用彩色 ASCII（print_color_qr）
-    echo "终端不支持 PNG 图片预览，将使用彩色 ASCII 二维码："
-    print_color_qr "$TEXT"
-
-    echo
-    echo "🔧 如果彩色二维码无法识别，请复制以下链接："
-    echo "$TEXT"
-    echo "========================================"
-    echo
-}
 
 
 # 调用主函数
