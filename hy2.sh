@@ -266,7 +266,6 @@ install_singbox() {
         manage_packages install tar
     fi
 
-    manage_packages install qrencode
     # 判断系统架构
 
     ARCH=$(uname -m)
@@ -301,6 +300,8 @@ install_singbox() {
    # 下载完成并解压后，假设当前目录有 ./sing-box
     chmod +x sing-box
 
+    # 安装执行文件到 work_dir
+    mkdir -p "${work_dir}"
     # 将可执行文件移动到你定义的 work_dir
     mv sing-box "${work_dir}/${server_name}"
 
