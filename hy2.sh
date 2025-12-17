@@ -8,6 +8,10 @@
 
 export LANG=en_US.UTF-8
 
+# 固定版本号
+SINGBOX_VERSION="1.12.12"
+
+
 # 项目信息常量
 AUTHOR="LittleDoraemon"
 VERSION="v1.0.1"
@@ -256,38 +260,33 @@ allow_port() {
 # 下载并安装 sing-box
 install_singbox() {
     clear
-    purple "正在安装sing-box中，请稍后..."
+    purple "正在准备sing-box中，请稍后..."
     # 判断系统架构
-    ARCH_RAW=$(uname -m)
-    case "${ARCH_RAW}" in
-        'x86_64') ARCH='amd64' ;;
-        'x86' | 'i686' | 'i386') ARCH='386' ;;
-        'aarch64' | 'arm64') ARCH='arm64' ;;
-        'armv7l') ARCH='armv7' ;;
-        's390x') ARCH='s390x' ;;
-        *) red "不支持的架构: ${ARCH_RAW}"; exit 1 ;;
+
+    # 自动识别 Arch
+    ARCH=$(uname -m)
+    case "$ARCH" in
+        x86_64) ARCH=amd64 ;;
+        aarch64) ARCH=arm64 ;;
+        armv7l) ARCH=armv7 ;;
+        i386|i686) ARCH=i386 ;;
+        mips64el) ARCH=mips64le ;;
+        riscv64) ARCH=riscv64 ;;
+        ppc64le) ARCH=ppc64le ;;
+        s390x) ARCH=s390x ;;
+        *)
+            echo "Unsupported architecture: $ARCH"
+            exit 1
+            ;;
     esac
 
-    # 下载sing-box
-    [ ! -d "${work_dir}" ] && mkdir -p "${work_dir}" && chmod 777 "${work_dir}"
-    
-    # 下载qrencode工具
-    curl -sLo "${work_dir}/qrencode" "https://$ARCH.ssss.nyc.mn/qrencode"
-    curl -sLo "${work_dir}/sing-box" "https://$ARCH.ssss.nyc.mn/sbx"
+    DOWNLOAD_URL="https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/sing-box-linux-${ARCH}"
 
-    # 正确的 Sing-box 下载地址（官方源）
-    # INGBOX_URL="https://github.com/SagerNet/sing-box/releases/latest/download/sing-box-linux-${ARCH}"
+    echo "Downloading sing-box v${SINGBOX_VERSION} for ${ARCH}..."
+    curl -fsSL "$DOWNLOAD_URL" -o /usr/local/bin/sing-box
+    chmod +x /usr/local/bin/sing-box
+    echo "Installed sing-box v${SINGBOX_VERSION}"
 
-    # 下载 sing-box（不会卡住、可自动失败退出）
-    #  if ! curl -L --retry 3 --retry-delay 2 -o "${work_dir}/sing-box" "$SINGBOX_URL"; then
-    #     red "Sing-box 下载失败，请检查网络或 GitHub 访问。"
-    #     exit 1
-    #  fi
-
-    # chmod +x "${work_dir}/sing-box"
-
-    chown root:root ${work_dir} && chmod +x ${work_dir}/${server_name} ${work_dir}/qrencode
-    
     # 检查是否通过环境变量提供了参数
     local use_env_vars=false
     if [ -n "$PORT" ] || [ -n "$UUID" ] || [ -n "$RANGE_PORTS" ]; then
@@ -520,16 +519,16 @@ base64 -w0 ${work_dir}/url.txt > ${work_dir}/sub.txt
 chmod 644 ${work_dir}/sub.txt
 yellow "\n温馨提醒：需打开V2rayN或其他软件里的 "跳过证书验证"，或将节点的Insecure或TLS里设置为"true"\n"
 green "V2rayN,Shadowrocket,Nekobox,Loon,Karing,Sterisand订阅链接：http://${server_ip}:${nginx_port}/${password}\n"
-$work_dir/qrencode "http://${server_ip}:${nginx_port}/${password}"
+generate_qr "http://${server_ip}:${nginx_port}/${password}"
 yellow "\n=========================================================================================="
 green "\n\nClash,Mihomo系列订阅链接：https://sublink.eooce.com/clash?config=http://${server_ip}:${nginx_port}/${password}\n"
-$work_dir/qrencode "https://sublink.eooce.com/clash?config=http://${server_ip}:${nginx_port}/${password}"
+generate_qr "https://sublink.eooce.com/clash?config=http://${server_ip}:${nginx_port}/${password}"
 yellow "\n=========================================================================================="
 green "\n\nSing-box订阅链接：https://sublink.eooce.com/singbox?config=http://${server_ip}:${nginx_port}/${password}\n"
-$work_dir/qrencode "https://sublink.eooce.com/singbox?config=http://${server_ip}:${nginx_port}/${password}"
+generate_qr "https://sublink.eooce.com/singbox?config=http://${server_ip}:${nginx_port}/${password}"
 yellow "\n=========================================================================================="
 green "\n\nSurge订阅链接：https://sublink.eooce.com/surge?config=http://${server_ip}:${nginx_port}/${password}\n"
-$work_dir/qrencode "https://sublink.eooce.com/surge?config=http://${server_ip}:${nginx_port}/${password}"
+generate_qr "https://sublink.eooce.com/surge?config=http://${server_ip}:${nginx_port}/${password}"
 yellow "\n==========================================================================================\n"
 }
 
@@ -1367,6 +1366,22 @@ main() {
         main_loop
     fi
 }
+generate_qr() {
+    local TEXT="$1"
+
+    echo
+    echo "========================================"
+    echo "📱 请手机扫码以下二维码链接（全球可用）："
+    encoded=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$TEXT")
+    QR_URL="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=$encoded"
+    echo "$QR_URL"
+    echo "========================================"
+
+    echo
+    echo "🔧 如果终端无法扫码，请手动复制以下配置："
+    echo "$TEXT"
+}
+
 
 # 调用主函数
 main
