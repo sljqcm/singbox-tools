@@ -286,15 +286,23 @@ install_singbox() {
     FILE="sing-box-${SINGBOX_VERSION}-linux-${ARCH}.tar.gz"
     DOWNLOAD_URL="https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/${FILE}"
 
-    echo "Downloading $FILE..."
-    curl -fsSL -o "$FILE" "$DOWNLOAD_URL"
+    echo "Downloading ${FILE}..."
+    curl -fsSL "$DOWNLOAD_URL" -o "$FILE"
 
-    # 创建临时目录并解压
-    TMP_DIR="sing-box-${SINGBOX_VERSION}-linux-${ARCH}"
+    echo "Extracting..."
     tar -xzf "$FILE"
-    chmod +x "$TMP_DIR/sing-box"
-    mv "$TMP_DIR/sing-box" /usr/local/bin/sing-box
-    rm -rf "$FILE" "$TMP_DIR"
+
+    # 进入正确目录
+    cd "sing-box-${SINGBOX_VERSION}-linux-${ARCH}"
+
+    # 安装执行文件
+    chmod +x sing-box
+    mv sing-box /usr/local/bin/sing-box
+
+    # 创建配置目录
+    mkdir -p /etc/sing-box
+
+    echo "Sing-box v${SINGBOX_VERSION} installed successfully!"
 
     # 检查是否通过环境变量提供了参数
     local use_env_vars=false
