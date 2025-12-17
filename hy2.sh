@@ -14,7 +14,7 @@ SINGBOX_VERSION="1.12.13"
 
 # 项目信息常量
 AUTHOR="LittleDoraemon"
-VERSION="v1.0.10"
+VERSION="v1.0.1"
 
 # 定义颜色
 re="\033[0m"
@@ -427,7 +427,6 @@ install_singbox() {
   }
 } 
 EOF
-
 }
  
 
@@ -471,7 +470,7 @@ EOF
 
 # 适配alpine 守护进程
 alpine_openrc_services() {
-    cat > /etc/init.d/sing-box << 'EOF'
+    cat > /etc/init.d/sing-box << EOF
 #!/sbin/openrc-run
 
 description="sing-box service"
@@ -517,7 +516,6 @@ get_info() {
 
       [ -z "$node_name" ] && node_name="$DEFAULT_NODE_NAME"
   fi
-
 
   # 检查是否配置了端口跳跃
   if [ -n "$RANGE_PORTS" ] && [[ "$RANGE_PORTS" =~ ^([0-9]+)-([0-9]+)$ ]]; then
@@ -614,30 +612,30 @@ EOF
             fi
         fi
     else 
-        cat > /etc/nginx/nginx.conf << EOF
-user nginx;
-worker_processes auto;
-error_log /var/log/nginx/error.log;
-pid /run/nginx.pid;
+                cat > /etc/nginx/nginx.conf << EOF
+        user nginx;
+        worker_processes auto;
+        error_log /var/log/nginx/error.log;
+        pid /run/nginx.pid;
 
-events {
-    worker_connections 1024;
-}
+        events {
+            worker_connections 1024;
+        }
 
-http {
-    include       /etc/nginx/mime.types;
-    default_type  application/octet-stream;
-    
-    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
-                      '$status $body_bytes_sent "$http_referer" '
-                      '"$http_user_agent" "$http_x_forwarded_for"';
-    
-    access_log  /var/log/nginx/access.log  main;
-    sendfile        on;
-    keepalive_timeout  65;
-    
-    include /etc/nginx/conf.d/*.conf;
-}
+        http {
+            include       /etc/nginx/mime.types;
+            default_type  application/octet-stream;
+            
+            log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                            '$status $body_bytes_sent "$http_referer" '
+                            '"$http_user_agent" "$http_x_forwarded_for"';
+            
+            access_log  /var/log/nginx/access.log  main;
+            sendfile        on;
+            keepalive_timeout  65;
+            
+            include /etc/nginx/conf.d/*.conf;
+        }
 EOF
     fi
 
@@ -957,9 +955,10 @@ EOF
             ip=$(get_realip)
             uuid=$(sed -n 's/.*hysteria2:\/\/\([^@]*\)@.*/\1/p' $client_dir)
             line_number=$(grep -n 'hysteria2://' $client_dir | cut -d':' -f1)
-            isp=$(curl -s --max-time 2 https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18}' | sed -e 's/ /_/g' || echo "vps")
+            # 从url.txt中提取现有的节点名称
+            existing_node_name=$(sed -n 's/.*hysteria2:\/\/[^#]*#\(.*\)/\1/p' $client_dir)
             sed -i.bak "/hysteria2:/d" $client_dir
-            sed -i "${line_number}i hysteria2://$uuid@$ip:$listen_port?peer=www.bing.com&insecure=1&alpn=h3&obfs=none&mport=$listen_port,$min_port-$max_port#$isp" $client_dir
+            sed -i "${line_number}i hysteria2://$uuid@$ip:$listen_port?peer=www.bing.com&insecure=1&alpn=h3&obfs=none&mport=$listen_port,$min_port-$max_port#$existing_node_name" $client_dir
             base64 -w0 $client_dir > /etc/sing-box/sub.txt
             while IFS= read -r line; do yellow "$line"; done < ${work_dir}/url.txt
             green "\nhysteria2端口跳跃已开启,跳跃端口为：${purple}$min_port-$max_port${re} ${green}请更新订阅或手动复制以上hysteria2节点${re}\n"
@@ -1028,7 +1027,7 @@ disable_open_sub() {
             server_ip=$(get_realip)
             password=$(tr -dc A-Za-z < /dev/urandom | head -c 32) 
             sed -i "s|\(location = /\)[^ ]*|\1$password|" /etc/nginx/conf.d/sing-box.conf
-        sub_port=$(port=$(grep -E 'listen [0-9]+;' "/etc/nginx/conf.d/sing-box.conf" | awk '{print $2}' | sed 's/;//'); if [ "$port" -eq 80 ]; then echo ""; else echo "$port"; fi)
+            sub_port=$(port=$(grep -E 'listen [0-9]+;' "/etc/nginx/conf.d/sing-box.conf" | awk '{print $2}' | sed 's/;//'); if [ "$port" -eq 80 ]; then echo ""; else echo "$port"; fi)
             start_nginx
             (port=$(grep -E 'listen [0-9]+;' "/etc/nginx/conf.d/sing-box.conf" | awk '{print $2}' | sed 's/;//'); if [ "$port" -eq 80 ]; then echo ""; else green "订阅端口：$port"; fi); link=$(if [ -z "$sub_port" ]; then echo "http://$server_ip/$password"; else echo "http://$server_ip:$sub_port/$password"; fi); green "\n新的节点订阅链接：$link\n"
             ;; 
@@ -1148,6 +1147,8 @@ quick_install() {
     install_singbox
     
    start_service_after_finish_sb
+}
+
 # 安装共同依赖包
 install_common_packages() {
     manage_packages install tar nginx jq openssl lsof coreutils tar
@@ -1173,8 +1174,6 @@ start_service_after_finish_sb(){
     get_info
     add_nginx_conf
 }
-
-
 
 
 # 主循环
@@ -1295,7 +1294,7 @@ handle_range_ports() {
                 red "错误：RANGE_PORTS端口范围无效，结束端口必须大于起始端口"
             fi
         else
-            red "错误：RANGE_PORTS格式无效，应为 起始端口-结束端口 (例如: 20000-50000)"
+            red "错误：RANGE_PORTS格式无效，应为 起始端口-结束端口 (例如: 1-65535)"
         fi
     fi
 }
