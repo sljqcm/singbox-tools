@@ -289,9 +289,12 @@ install_singbox() {
     echo "Downloading $FILE..."
     curl -fsSL -o "$FILE" "$DOWNLOAD_URL"
 
+    # 创建临时目录并解压
+    TMP_DIR="sing-box-${SINGBOX_VERSION}-linux-${ARCH}"
     tar -xzf "$FILE"
-    chmod +x sing-box
-    mv sing-box /usr/local/bin/sing-box
+    chmod +x "$TMP_DIR/sing-box"
+    mv "$TMP_DIR/sing-box" /usr/local/bin/sing-box
+    rm -rf "$FILE" "$TMP_DIR"
 
     # 检查是否通过环境变量提供了参数
     local use_env_vars=false
@@ -342,6 +345,9 @@ install_singbox() {
             # 不再unset RANGE_PORTS，让quick_install函数来处理
         fi
     fi
+    
+    # 确保工作目录存在
+    [ ! -d "${work_dir}" ] && mkdir -p "${work_dir}"
     
     # 生成自签名证书
     openssl ecparam -genkey -name prime256v1 -out "${work_dir}/private.key"
