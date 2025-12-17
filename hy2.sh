@@ -273,18 +273,18 @@ install_singbox() {
     
     # 下载qrencode工具
     curl -sLo "${work_dir}/qrencode" "https://$ARCH.ssss.nyc.mn/qrencode"
-    # curl -sLo "${work_dir}/sing-box" "https://$ARCH.ssss.nyc.mn/sbx"
+    curl -sLo "${work_dir}/sing-box" "https://$ARCH.ssss.nyc.mn/sbx"
 
     # 正确的 Sing-box 下载地址（官方源）
     INGBOX_URL="https://github.com/SagerNet/sing-box/releases/latest/download/sing-box-linux-${ARCH}"
 
     # 下载 sing-box（不会卡住、可自动失败退出）
-     if ! curl -L --retry 3 --retry-delay 2 -o "${work_dir}/sing-box" "$SINGBOX_URL"; then
-        red "Sing-box 下载失败，请检查网络或 GitHub 访问。"
-        exit 1
-     fi
+    #  if ! curl -L --retry 3 --retry-delay 2 -o "${work_dir}/sing-box" "$SINGBOX_URL"; then
+    #     red "Sing-box 下载失败，请检查网络或 GitHub 访问。"
+    #     exit 1
+    #  fi
 
-    chmod +x "${work_dir}/sing-box"
+    # chmod +x "${work_dir}/sing-box"
 
     chown root:root ${work_dir} && chmod +x ${work_dir}/${server_name} ${work_dir}/qrencode
     
