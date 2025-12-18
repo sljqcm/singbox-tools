@@ -326,7 +326,10 @@ install_singbox() {
 
     # 生成自签名证书
     openssl ecparam -genkey -name prime256v1 -out "${work_dir}/private.key"
-    openssl req -new -x509 -days 3650 -key "${work_dir}/private.key" -out "${work_dir}/cert.pem" -subj "/CN=bing.com"
+    openssl req -x509 -new -nodes -key "${work_dir}/private.key" \
+    -sha256 -days 3650 \
+    -subj "/C=US/ST=CA/O=bing.com/CN=bing.com" \
+    -out "${work_dir}/cert.pem"
 
     # 放行端口
     allow_port $hy2_port/udp > /dev/null 2>&1
