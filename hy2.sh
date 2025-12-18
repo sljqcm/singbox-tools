@@ -1299,27 +1299,30 @@ function is_port_occupied() {
 }
 
 # 验证RANGE_PORTS格式是否正确
+# 验证范围是否合法（成功返回 0，失败返回 1）
 function is_valid_range_ports() {
-  local range=$1
+  local range="$1"
 
   is_valid_range_ports_format "$range"
+  if [ $? -ne 0 ]; then
+      return 1   # 格式无效
+  fi
 
-  if [ $? -eq 0 ]; then
-    start_port=${BASH_REMATCH[1]}
-    end_port=${BASH_REMATCH[2]}
-    # 检查端口范围是否合法
-    is_valid_port "$start_port"
-    start_port_valid=$?
-    is_valid_port "$end_port"
-    end_port_valid=$?
-    
-    if [ "$start_port_valid" -eq 1 ] && [ "$end_port_valid" -eq 1 ] && [ "$start_port" -le "$end_port" ]; then
-      return 1
-    else
-      return 0
-    fi
+  local start_port="${BASH_REMATCH[1]}"
+  local end_port="${BASH_REMATCH[2]}"
+
+  # 检查端口是否有效
+  is_valid_port "$start_port"
+  if [ $? -ne 0 ]; then return 1; fi
+
+  is_valid_port "$end_port"
+  if [ $? -ne 0 ]; then return 1; fi
+
+  # 检查范围顺序
+  if [ "$start_port" -le "$end_port" ]; then
+      return 0   # ✔ 合法范围
   else
-    return 0
+      return 1   # ❌ 起始端口必须小于等于结束端口
   fi
 }
 
