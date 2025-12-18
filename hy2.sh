@@ -1194,9 +1194,11 @@ handle_range_ports() {
 
         # 解析端口范围
         is_valid_range_ports_format "$RANGE_PORTS"
+        local return_value=$?
+        echo "is_valid_range_ports_format 返回值: $return_value"
 
        
-        if [ $? -eq 1 ]; then
+        if [ $return_value -eq 1 ]; then
             local min_port="${BASH_REMATCH[1]}"
             local max_port="${BASH_REMATCH[2]}"
             
@@ -1442,9 +1444,11 @@ function get_range_ports() {
     if [ $? -eq 0 ]; then
       echo "RANGE_PORTS的格式无效，应该是 start_port-end_port 的形式，且端口号必须在1-65535之间，且 start_port <= end_port!" >&2
       exit 1
+    else
+        echo "使用环境变量中的RANGE_PORTS: $range"
+        echo "$range"
     fi
-    echo "使用环境变量中的RANGE_PORTS: $range"
-    echo "$range"
+
   else  # 环境变量 RANGE_PORTS 为空时，使用默认值
     echo "RANGE_PORTS为空，使用默认值: $DEFAULT_RANGE_PORTS"
     echo "$DEFAULT_RANGE_PORTS"
