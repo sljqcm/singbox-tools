@@ -1324,13 +1324,10 @@ function is_valid_range_ports() {
 
 # 验证RANGE_PORTS格式
 function is_valid_range_ports_format() {
-  local range=$1
-  echo "is_valid_range_ports_format函数接收到的参数: $range"
+  local range="$(echo "$1" | tr -d '\r' | xargs)"  # 去除\r 和前后空白
   if [[ "$range" =~ ^([0-9]+)-([0-9]+)$ ]]; then
-    echo "is_valid_range_ports_format函数匹配成功，返回1"
     return 1
   else
-    echo "is_valid_range_ports_format函数匹配失败，返回0"
     return 0
   fi
 }
