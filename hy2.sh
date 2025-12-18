@@ -489,7 +489,7 @@ get_info() {
   # 检查是否配置了端口跳跃
   if [ -n "$RANGE_PORTS" ]; then
       is_valid_range_ports_format "$RANGE_PORTS"
-      if [ $? -eq 1 ]; then
+      if [ $? -eq 0 ]; then
           min_port="${BASH_REMATCH[1]}"
           max_port="${BASH_REMATCH[2]}"
           hysteria2_url="hysteria2://${uuid}@${server_ip}:${hy2_port}/?insecure=1&alpn=h3&obfs=none&mport=${hy2_port},${min_port}-${max_port}#${node_name}"
@@ -1303,7 +1303,7 @@ function is_valid_range_ports() {
 
   is_valid_range_ports_format "$range"
 
-  if [ $? -eq 1 ]; then
+  if [ $? -eq 0 ]; then
     start_port=${BASH_REMATCH[1]}
     end_port=${BASH_REMATCH[2]}
     # 检查端口范围是否合法
@@ -1322,14 +1322,14 @@ function is_valid_range_ports() {
   fi
 }
 
-# 验证RANGE_PORTS格式
+# 验证RANGE_PORTS格式（成功返回 0，失败返回 1）
 function is_valid_range_ports_format() {
-  local range="$(echo "$1" | tr -d '\r' | xargs)"  # 去除\r 和前后空白
-  if [[ "$range" =~ ^([0-9]+)-([0-9]+)$ ]]; then
-    return 1
-  else
-    return 0
-  fi
+    local range="$(echo "$1" | tr -d '\r' | xargs)"  # 去除 \r 和前后空白
+    if [[ "$range" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+        return 0   # ✔ 成功
+    else
+        return 1   # ❌ 失败
+    fi
 }
 
 # 获取端口号
@@ -1438,11 +1438,10 @@ function get_range_ports() {
   local range=$1
   if [[ -n "$range" ]]; then  # 环境变量 RANGE_PORTS 有值时，直接使用
     is_valid_range_ports "$range"
-    if [ $? -eq 0 ]; then
-      echo "RANGE_PORTS的格式无效，应该是 start_port-end_port 的形式，且端口号必须在1-65535之间，且 start_port <= end_port!" >&2
-      exit 1
+    if [ $? -ne 0 ]; then   # ✔ 非 0 才是错误
+        echo "RANGE_PORTS的格式无效，应该是 start_port-end_port 的形式..."
+        exit 1
     else
-        # 只输出实际的端口范围值，不输出信息文本
         echo "$range"
     fi
 
