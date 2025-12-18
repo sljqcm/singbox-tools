@@ -53,14 +53,8 @@ client_dir="${work_dir}/url.txt"
 
 
 # 设置默认值
-DEFAULT_PORT=$(shuf -i 1-65535 -n 1)  # 随机生成一个默认端口，范围是1-65535
 DEFAULT_RANGE_PORTS=""                    # 默认RANGE_PORTS为空
 DEFAULT_UUID=$(cat /proc/sys/kernel/random/uuid)  # 获取系统默认UUID
-
-# 获取环境变量，如果环境变量有值则优先使用环境变量
-PORT="${PORT:-$DEFAULT_PORT}"                # 如果环境变量PORT有值，使用环境变量PORT，否则使用默认值
-UUID="${UUID:-$DEFAULT_UUID}"                # 如果环境变量UUID有值，使用环境变量UUID，否则使用默认值
-RANGE_PORTS="${RANGE_PORTS:-$DEFAULT_RANGE_PORTS}"  # 如果环境变量RANGE_PORTS有值，使用环境变量RANGE_PORTS，否则使用默认值
 
 
 # 默认节点名称常量
@@ -297,34 +291,36 @@ install_singbox() {
     # 调用singbox安装函数
     install_sing_box_then_clear "$URL" "$FILENAME" "$work_dir" "$server_name"
 
+    local use_env_flag=0
     # 检查是否通过环境变量提供了参数
     is_interactive_mode
     # 转换返回值逻辑：0表示交互式模式，1表示非交互式模式
     if [ $? -eq 0 ]; then
-        local use_env_vars=false
+       use_env_flag=0
     else
-        local use_env_vars=true
+       use_env_flag=1
     fi
 
     # 打印是否是交互式模式
-    if [ "$use_env_vars" = true ]; then
+    if [ $use_env_flag = 0 ]; then
         echo "当前运行模式: 非交互式模式"
     else
         echo "当前运行模式: 交互式模式"
     fi
 
     # 获取参数值
-    echo "开始获取参数值..."
-    PORT=$(get_port "$PORT")
-    echo "获取到的PORT: $PORT"
-    UUID=$(get_uuid "$UUID")
-    echo "获取到的UUID: $UUID"
+
+    PORT=$(get_port "$PORT"  $use_env_flag)
+
+    echo "获取到的port：$PORT"
+    UUID=$(get_uuid "$UUID"  $use_env_flag)
+
+    echo "获取到的uuid：$UUID"
     RANGE_PORTS=$(get_range_ports "$RANGE_PORTS")
-    echo "获取到的RANGE_PORTS: $RANGE_PORTS"
-        
+    
     # 定义hy2_port变量
-    hy2_port=$PORT
-    echo "定义hy2_port变量: $hy2_port"
+    hy2_port=$PORT    
+
     # 确保工作目录存在
     [ ! -d "${work_dir}" ] && mkdir -p "${work_dir}"
 
@@ -1184,15 +1180,12 @@ main_loop() {
 
 # 处理RANGE_PORTS环境变量
 handle_range_ports() {
-    echo "开始调用 handle_range_ports 函数"
     # 如果提供了RANGE_PORTS环境变量，则自动配置端口跳跃
     if [ -n "$RANGE_PORTS" ]; then
-        echo "检测到RANGE_PORTS环境变量: $RANGE_PORTS"
         # 解析端口范围
         if [[ "$RANGE_PORTS" =~ ^([0-9]+)-([0-9]+)$ ]]; then
             local min_port="${BASH_REMATCH[1]}"
             local max_port="${BASH_REMATCH[2]}"
-            echo "解析出起始端口: $min_port, 结束端口: $max_port"
             
             # 验证端口范围
             if [ "$max_port" -gt "$min_port" ]; then
@@ -1204,8 +1197,6 @@ handle_range_ports() {
         else
             red "错误：RANGE_PORTS格式无效，应为 起始端口-结束端口 (例如: 1-65535)"
         fi
-    else
-        echo "未检测到RANGE_PORTS环境变量"
     fi
 }
 
@@ -1269,31 +1260,40 @@ EOF
 # 验证端口号是否有效
 function is_valid_port() {
   local port=$1
-  echo "验证端口是否有效: $port"
-  local result=$([[ "$port" =~ ^[1-9][0-9]{0,4}$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ])
-  echo "端口验证结果: $result"
+  echo "检查端口 $port 是否有效..."
   [[ "$port" =~ ^[1-9][0-9]{0,4}$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ]
+}
+
+# 验证端口是否被占用
+function is_port_in_use() {
+  local port=$1
+  echo "检查端口 $port 是否被占用..."
+  if lsof -i :$port &>/dev/null; then
+    echo "端口 $port 已被占用"
+    return 0  # 端口被占用
+  else
+    echo "端口 $port 未被占用"
+    return 1  # 端口未被占用
+  fi
 }
 
 # 验证RANGE_PORTS格式是否正确
 function is_valid_range_ports() {
   local range=$1
-  echo "验证RANGE_PORTS格式是否正确: $range"
-  # RANGE_PORTS必须符合 start_port-end_port 的格式
+  echo "检查RANGE_PORTS格式..."
   if [[ "$range" =~ ^([0-9]{1,5})-([0-9]{1,5})$ ]]; then
     start_port=${BASH_REMATCH[1]}
     end_port=${BASH_REMATCH[2]}
-    echo "解析出起始端口: $start_port, 结束端口: $end_port"
     # 检查端口范围是否合法
     if is_valid_port "$start_port" && is_valid_port "$end_port" && [ "$start_port" -le "$end_port" ]; then
-      echo "RANGE_PORTS格式验证通过"
+      echo "RANGE_PORTS格式正确: $start_port 到 $end_port"
       return 0
     else
-      echo "RANGE_PORTS格式验证失败：端口范围不合法"
+      echo "RANGE_PORTS端口范围不合法"
       return 1
     fi
   else
-    echo "RANGE_PORTS格式验证失败：不符合 start_port-end_port 格式"
+    echo "RANGE_PORTS格式无效，应该是 start_port-end_port 的形式"
     return 1
   fi
 }
@@ -1301,100 +1301,114 @@ function is_valid_range_ports() {
 # 获取端口号
 function get_port() {
   local port=$1
-  echo "开始调用 get_port 函数，传入参数: $port"
-  
-  if [[ -z "$port" ]]; then
-    echo "端口参数为空，需要用户输入或自动生成"
-    red "请输入端口号 (1-65535)，如果留空将自动生成一个未占用的端口:"
-    
-    read user_port
-    echo "用户输入的端口: $user_port"
-    
-    if [[ -n "$user_port" ]]; then
-      echo "验证用户输入的端口: $user_port"
-      if is_valid_port "$user_port"; then
-        echo "端口验证通过，返回端口: $user_port"
-        echo "$user_port"
-      else
-        echo "端口验证失败: $user_port"
-        red "输入的端口号无效，请输入一个有效的端口号 (1-65535)!" >&2
-        exit 1
-      fi
-    else
-      echo "用户未输入端口，将自动生成随机端口"
-      # 随机生成端口并检查是否被占用
-      while : ; do
-        local random_port=$(shuf -i 1-65535 -n 1)  # 生成1-65535范围内的随机端口
-        echo "生成随机端口: $random_port"
-        if ! lsof -i :$random_port &>/dev/null; then
-          echo "随机端口未被占用，返回端口: $random_port"
-          echo "$random_port"
-          break
+  local interactive_mode=$2  # 将交互模式作为参数传入
+  while : ; do
+    if [[ -z "$port" ]]; then  # 环境变量 PORT 为空时，接受用户输入
+      if [[ "$interactive_mode" -eq 1 ]]; then
+        echo "请输入端口号 (1-65535)，如果留空将自动生成一个未占用的端口:"
+        read user_port
+        if [[ -n "$user_port" ]]; then
+          if is_valid_port "$user_port"; then
+            if is_port_in_use "$user_port"; then
+              echo "端口 $user_port 已被占用，请输入其他端口！"
+            else
+              echo "使用用户输入的端口: $user_port"
+              break
+            fi
+          else
+            echo "输入的端口号无效，请输入一个有效的端口号 (1-65535)!"
+          fi
         else
-          echo "随机端口 $random_port 已被占用，重新生成"
+          # 随机生成端口并检查是否被占用
+          while : ; do
+            local random_port=$(shuf -i 1-65535 -n 1)  # 生成1-65535范围内的随机端口
+            echo "自动生成的随机端口: $random_port"
+            if ! is_port_in_use "$random_port"; then
+              echo "使用生成的端口: $random_port"
+              break
+            fi
+          done
+          break
         fi
-      done
+      else
+        # 非交互模式下，直接生成一个未占用的随机端口
+        while : ; do
+          local random_port=$(shuf -i 1-65535 -n 1)  # 生成1-65535范围内的随机端口
+          echo "自动生成的随机端口: $random_port"
+          if ! is_port_in_use "$random_port"; then
+            echo "使用生成的端口: $random_port"
+            break
+          fi
+        done
+        break
+      fi
+    else  # 环境变量 PORT 有值时，使用它
+      if is_valid_port "$port"; then
+        if is_port_in_use "$port"; then
+          echo "端口 $port 已被占用，请选择其他端口！"
+          # 进入用户输入端口号的模式
+          get_port  # 递归调用，要求用户重新输入端口号
+        else
+          echo "使用环境变量中的端口: $port"
+          break
+        fi
+      else
+        echo "输入的端口号无效，请输入一个有效的端口号 (1-65535)!"
+      fi
     fi
-  else
-    echo "端口参数不为空，直接返回: $port"
-    echo "$port"
-  fi
-}# 获取UUID
+  done
+}
+
+# 获取UUID
 function get_uuid() {
   local uuid=$1
-  echo "开始调用 get_uuid 函数，传入参数: $uuid"
-  
-  if [[ -z "$uuid" ]]; then
-    echo "UUID参数为空，需要用户输入或使用默认值"
-    red "请输入UUID，留空将自动生成:"
-    read user_uuid
-    echo "用户输入的UUID: $user_uuid"
-    
-    if [[ -n "$user_uuid" ]]; then
-      echo "验证用户输入的UUID: $user_uuid"
-      if is_valid_uuid "$user_uuid"; then
-        echo "UUID验证通过，返回UUID: $user_uuid"
-        echo "$user_uuid"
+  local interactive_mode=$2  # 将交互模式作为参数传入
+  while : ; do
+    if [[ -z "$uuid" ]]; then  # 环境变量 UUID 为空时，接受用户输入
+      if [[ "$interactive_mode" -eq 1 ]]; then
+        echo "请输入UUID，留空将自动生成:"
+        read user_uuid
+        if [[ -n "$user_uuid" ]]; then
+          if is_valid_uuid "$user_uuid"; then
+            echo "使用用户输入的UUID: $user_uuid"
+            break
+          else
+            echo "输入的UUID格式无效，请输入正确的UUID格式!"
+          fi
+        else
+          echo "自动生成UUID: $DEFAULT_UUID"
+          break
+        fi
       else
-        echo "UUID验证失败: $user_uuid"
-        red "输入的UUID格式无效，请输入正确的UUID格式!" >&2
-        exit 1
+        echo "自动生成UUID: $DEFAULT_UUID"
+        break
       fi
-    else
-      echo "用户未输入UUID，使用默认UUID: $DEFAULT_UUID"
-      echo "$DEFAULT_UUID"
+    else  # 环境变量 UUID 有值时，使用它
+      echo "使用环境变量中的UUID: $uuid"
+      break
     fi
-  else
-    echo "UUID参数不为空，直接返回: $uuid"
-    echo "$uuid"
-  fi
+  done
 }
 
 # 验证UUID的格式
 function is_valid_uuid() {
   local uuid=$1
-  echo "验证UUID格式是否正确: $uuid"
-  local result=$([[ "$uuid" =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ ]])
-  echo "UUID格式验证结果: $result"
+  echo "检查UUID格式..."
   [[ "$uuid" =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ ]]
 }
 
 # 获取RANGE_PORTS
 function get_range_ports() {
   local range=$1
-  echo "开始调用 get_range_ports 函数，传入参数: $range"
-  
-  if [[ -n "$range" ]]; then
-    echo "RANGE_PORTS参数不为空，验证格式: $range"
+  if [[ -n "$range" ]]; then  # 环境变量 RANGE_PORTS 有值时，直接使用
     if ! is_valid_range_ports "$range"; then
-      echo "RANGE_PORTS格式验证失败: $range"
-      red "RANGE_PORTS的格式无效，应该是 start_port-end_port 的形式，且端口号必须在1-65535之间，且 start_port <= end_port!" >&2
+      echo "RANGE_PORTS的格式无效，应该是 start_port-end_port 的形式，且端口号必须在1-65535之间，且 start_port <= end_port!" >&2
       exit 1
     fi
-    echo "RANGE_PORTS格式验证通过，返回: $range"
+    echo "使用环境变量中的RANGE_PORTS: $range"
     echo "$range"
-  else
-    echo "RANGE_PORTS参数为空，使用默认值: $DEFAULT_RANGE_PORTS"
+  else  # 环境变量 RANGE_PORTS 为空时，使用默认值
+    echo "RANGE_PORTS为空，使用默认值: $DEFAULT_RANGE_PORTS"
     echo "$DEFAULT_RANGE_PORTS"
   fi
 }
