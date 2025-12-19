@@ -1292,6 +1292,72 @@ check_nodes() {
     print_node_info_custom "$server_ip" "$hy2_port" "$uuid" "$sub_port" "$RANGE_PORTS"
 }
 
+# ======================================================================
+# 卸载 Sing-box + 清理订阅系统
+# ======================================================================
+uninstall_singbox() {
+
+    clear
+    blue "============== 卸载 Sing-box（增强版） =============="
+    echo ""
+    read -rp "确认卸载 Sing-box？ [Y/n]（默认 Y）：" u
+    u=${u:-y}
+
+    if [[ ! "$u" =~ ^[Yy]$ ]]; then
+        yellow "已取消卸载操作"
+        return
+    fi
+
+    # -------------------------
+    # 1. 停止服务并删除 systemd 配置
+    # -------------------------
+    stop_singbox
+    systemctl disable sing-box >/dev/null 2>&1
+    rm -f /etc/systemd/system/sing-box.service
+    systemctl daemon-reload
+
+    # -------------------------
+    # 2. 删除 Sing-box 运行目录
+    # -------------------------
+    rm -rf /etc/sing-box
+    green "Sing-box 主程序与配置目录已删除"
+
+    # -------------------------
+    # 3. 删除订阅服务配置（Nginx）
+    # -------------------------
+    if [[ -f /etc/nginx/conf.d/singbox_sub.conf ]]; then
+        rm -f /etc/nginx/conf.d/singbox_sub.conf
+        green "订阅服务配置已删除"
+    fi
+
+    # -------------------------
+    # 4. 询问是否卸载 Nginx（可选）
+    # -------------------------
+    if command_exists nginx; then
+        echo ""
+        read -rp "是否卸载 Nginx？ [y/N]（默认 N）：" delng
+        delng=${delng:-n}
+
+        if [[ "$delng" =~ ^[Yy]$ ]]; then
+            if command_exists apt; then
+                apt remove -y nginx nginx-core
+            elif command_exists yum; then
+                yum remove -y nginx
+            elif command_exists dnf; then
+                dnf remove -y nginx
+            elif command_exists apk; then
+                apk del nginx
+            fi
+            green "Nginx 已卸载"
+        else
+            yellow "保留 Nginx（如需手动管理订阅服务，可继续使用）"
+            systemctl restart nginx >/dev/null 2>&1
+        fi
+    fi
+
+    echo ""
+    green "卸载完成！"
+}
 
 
 # ======================================================================
