@@ -500,12 +500,12 @@ print_node_info_custom() {
 
     hy2_url="hysteria2://${uuid}@${server_ip}:${hy2_port}/?insecure=1&alpn=h3&obfs=none&mport=${mport_param}"
 
-    # ---------------- Hy2 原始链接（新增输出） ----------------
+    # ========== ★★★ 新增：输出 hy2 原始链接 ★★★ ==========
     purple "\nHY2 原始链接（可直接导入客户端）："
     green  "$hy2_url"
     generate_qr "$hy2_url"
     yellow "=========================================================================================="
-
+    
 
     # ---------- 通用订阅 ----------
     if [[ -n "$range_ports" ]]; then
