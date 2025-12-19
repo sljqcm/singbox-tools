@@ -1292,6 +1292,90 @@ check_nodes() {
     print_node_info_custom "$server_ip" "$hy2_port" "$uuid" "$sub_port" "$RANGE_PORTS"
 }
 
+
+# ======================================================================
+# Sing-box 服务控制模块（增强修复版）
+# ======================================================================
+
+# ======================================================================
+# 重启 Sing-box 
+# ======================================================================
+restart_singbox() {
+
+    if command -v systemctl &>/dev/null; then
+        systemctl restart sing-box
+
+        if systemctl is-active sing-box >/dev/null 2>&1; then
+            green "Sing-box 服务已重启"
+        else
+            red "Sing-box 服务重启失败"
+        fi
+        return
+    fi
+
+    if command -v rc-service &>/dev/null; then
+        rc-service sing-box restart
+        green "Sing-box 已通过 rc-service 重启"
+        return
+    fi
+
+    red "无法重启 Sing-box（未知系统服务类型）"
+}
+
+
+# ======================================================================
+# 启动 Sing-box 
+# ======================================================================
+start_singbox() {
+
+    if command -v systemctl &>/dev/null; then
+        systemctl start sing-box
+
+        if systemctl is-active sing-box >/dev/null 2>&1; then
+            green "Sing-box 服务已启动"
+        else
+            red "Sing-box 服务启动失败"
+        fi
+        return
+    fi
+
+    if command -v rc-service &>/dev/null; then
+        rc-service sing-box start
+        green "Sing-box 已通过 rc-service 启动"
+        return
+    fi
+
+    red "无法启动 Sing-box（未知系统服务类型）"
+}
+
+
+
+# ======================================================================
+# 停止 Sing-box 
+# ======================================================================
+stop_singbox() {
+
+    if command -v systemctl &>/dev/null; then
+        systemctl stop sing-box
+
+        if systemctl is-active sing-box >/dev/null 2>&1; then
+            red "Sing-box 停止失败（服务仍在运行）"
+        else
+            yellow "Sing-box 服务已停止"
+        fi
+        return
+    fi
+
+    if command -v rc-service &>/dev/null; then
+        rc-service sing-box stop
+        yellow "Sing-box 已通过 rc-service 停止"
+        return
+    fi
+
+    red "无法停止 Sing-box（未知系统服务类型）"
+}
+
+
 # ======================================================================
 # 卸载 Sing-box + 清理订阅系统
 # ======================================================================
