@@ -1778,7 +1778,9 @@ cat > "$config_dir" <<EOF
   "log": { "level": "error", "output": "$work_dir/sb.log" },
 
   "dns": {
-    "servers": [ '"$dns_servers_json"' ],
+    "servers": [
+$dns_servers_json
+    ],
     "strategy": "$dns_strategy"
   },
 
