@@ -1099,11 +1099,7 @@ print_node_info_custom() {
     # ======================================================
     # 2. 生成订阅 URL
     # ======================================================
-    if [[ -n "$range_ports" ]]; then
-        base_url="http://${server_ip}:${range_ports}/${uuid}"
-    else
-        base_url="http://${server_ip}:${sub_port}/${uuid}"
-    fi
+    base_url="http://${server_ip}:${sub_port}/${uuid}"
 
     yellow '\n提示：请在客户端开启 “跳过证书验证” 或设置 TLS insecure=true\n'
 
@@ -1209,11 +1205,7 @@ generate_subscription_info() {
     # ------------------------
     RANGE_PORTS=$(parse_range_ports_from_url)
 
-    if [[ -n "$RANGE_PORTS" ]]; then
-        base_url="http://${server_ip}:${RANGE_PORTS}/${uuid}"
-    else
-        base_url="http://${server_ip}:${sub_port}/${uuid}"
-    fi
+    base_url="http://${server_ip}:${sub_port}/${uuid}"
 
     # ------------------------
     # 生成本地订阅文件（sub.txt / base64 / json）
