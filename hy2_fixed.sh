@@ -113,6 +113,50 @@ command_exists() { command -v "$1" >/dev/null 2>&1; }
 
 
 # ======================================================================
+# 安装常用依赖（增强修复版）
+# ======================================================================
+install_common_packages() {
+
+    # 需要安装的依赖
+    local pkgs="tar jq openssl lsof curl coreutils qrencode nginx"
+    local need_update=1
+
+    for p in $pkgs; do
+        if ! command_exists "$p"; then
+
+            # 首次缺包 → 进行 update（避免每个包都执行一次）
+            if [[ $need_update -eq 1 ]]; then
+                if command_exists apt; then
+                    apt update -y
+                elif command_exists yum; then
+                    yum makecache -y
+                elif command_exists dnf; then
+                    dnf makecache -y
+                elif command_exists apk; then
+                    apk update
+                fi
+                need_update=0
+            fi
+
+            yellow "安装依赖：$p"
+
+            if command_exists apt; then
+                apt install -y "$p"
+            elif command_exists yum; then
+                yum install -y "$p"
+            elif command_exists dnf; then
+                dnf install -y "$p"
+            elif command_exists apk; then
+                apk add "$p"
+            else
+                red "无法识别你的包管理器，请手动安装依赖：$p"
+            fi
+        fi
+    done
+}
+
+
+# ======================================================================
 # ------------------------ 端口工具函数 -------------------------------
 # ======================================================================
 
