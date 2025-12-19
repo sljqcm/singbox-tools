@@ -606,11 +606,11 @@ configure_port_jump() {
     # =====================================================
     # 1. 放行 INPUT（IPv4 + IPv6）
     # =====================================================
-    iptables -C INPUT -p udp --dport ${min}:${max} -j ACCEPT &>/dev/null || \
-        iptables -I INPUT -p udp --dport ${min}-${max} -j ACCEPT
+    iptables -C INPUT -p udp -m multiport --dports ${min}:${max} -j ACCEPT &>/dev/null || \
+        iptables -I INPUT -p udp -m multiport --dports ${min}:${max} -j ACCEPT
 
-    ip6tables -C INPUT -p udp --dport ${min}:${max} -j ACCEPT &>/dev/null || \
-        ip6tables -I INPUT -p udp --dport ${min}-${max} -j ACCEPT
+    ip6tables -C INPUT -p udp -m multiport --dports ${min}:${max} -j ACCEPT &>/dev/null || \
+        ip6tables -I INPUT -p udp -m multiport --dports ${min}:${max} -j ACCEPT
 
     green "已放行 UDP 端口区间：${min}-${max}"
 
