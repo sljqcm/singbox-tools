@@ -943,9 +943,9 @@ quick_install() {
 menu() {
     clear
     blue "===================================================="
-    gradient "       Sing-box Hy2 一键脚本（整合版）"
-    green   "                 作者：$AUTHOR"
-    yellow  "                 版本：$VERSION"
+    gradient "       Sing-box  一键脚本（Hy2整合版）"
+    green    "       作者：$AUTHOR"
+    yellow   "       版本：$VERSION"
     blue "===================================================="
     echo ""
 
