@@ -942,6 +942,7 @@ quick_install() {
     start_service_after_finish_sb
 
     green "自动安装完成！"
+    check_nodes
 }
 
 # ======================================================================
