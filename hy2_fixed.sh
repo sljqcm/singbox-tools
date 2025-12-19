@@ -1396,6 +1396,217 @@ stop_singbox() {
 
 
 # ======================================================================
+# 安装 Sing-box
+# 说明：
+#   - 自动与手动模式都支持（基于是否传入环境变量）
+#   - 自动创建目录 / 证书 / config.json
+#   - 不修改 sub.port（遵守你的规则）
+# ======================================================================
+install_singbox() {
+    clear
+    purple "准备下载并安装 Sing-box..."
+
+    # 创建运行目录（防止 url.txt 等写入失败）
+    mkdir -p "$work_dir"
+
+    # -------------------- 检测 CPU 架构 --------------------
+    ARCH=$(uname -m)
+    case "$ARCH" in
+        x86_64) ARCH="amd64" ;;
+        aarch64) ARCH="arm64" ;;
+        armv7l)  ARCH="armv7" ;;
+        i386|i686) ARCH="i386" ;;
+        riscv64) ARCH="riscv64" ;;
+        mips64el) ARCH="mips64le" ;;
+        *) err "不支持的架构: $ARCH" ;;
+    esac
+
+    FILE="sing-box-${SINGBOX_VERSION}-linux-${ARCH}.tar.gz"
+    URL="https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/${FILE}"
+
+    yellow "下载 Sing-box：$URL"
+    curl -fSL --retry 3 --retry-delay 2 --connect-timeout 10 -o "$FILE" "$URL" \
+        || { err "下载失败"; exit 1; }
+
+    yellow "解压中..."
+    tar -xzf "$FILE" || { err "解压失败"; exit 1; }
+    rm -f "$FILE"
+
+    extracted=$(find . -maxdepth 1 -type d -name "sing-box-*")
+    extracted=$(echo "$extracted" | head -1)
+
+    mv "$extracted/sing-box" "$work_dir/sing-box"
+    chmod +x "$work_dir/sing-box"
+    rm -rf "$extracted"
+
+    green "Sing-box 已成功安装"
+
+    # --------------------
+    # 判断自动或交互模式
+    # --------------------
+    is_interactive_mode
+    if [[ $? -eq 1 ]]; then
+        not_interactive=1
+        white "当前模式：自动模式（由环境变量触发）"
+    else
+        not_interactive=0
+        white "当前模式：交互模式（用户手动输入）"
+    fi
+
+    # ==================================================================
+    # 自动模式
+    # ==================================================================
+    if [[ $not_interactive -eq 1 ]]; then
+        PORT=$(get_port "$PORT")
+        UUID=$(get_uuid "$UUID")
+        HY2_PASSWORD="$UUID"
+
+    # ==================================================================
+    # 交互模式
+    # ==================================================================
+    else
+        # ---------- 输入主端口 ----------
+        while true; do
+            read -rp "请输入 HY2 主端口：" USER_PORT
+            if is_valid_port "$USER_PORT" && ! is_port_occupied "$USER_PORT"; then
+                PORT="$USER_PORT"
+                break
+            else
+                red "端口无效或已被占用，请重新输入"
+            fi
+        done
+
+        # ---------- 输入 UUID ----------
+        while true; do
+            read -rp "请输入 UUID（留空自动生成）：" USER_UUID
+            if [[ -z "$USER_UUID" ]]; then
+                UUID="$DEFAULT_UUID"
+                break
+            elif is_valid_uuid "$USER_UUID"; then
+                UUID="$USER_UUID"
+                break
+            else
+                red "UUID 格式不正确，请重新输入"
+            fi
+        done
+
+        HY2_PASSWORD="$UUID"
+    fi
+
+    white "最终 HY2 主端口：$PORT"
+    white "最终 UUID：$UUID"
+
+    RANGE_PORTS=$(get_range_ports "$RANGE_PORTS")
+    [[ -n "$RANGE_PORTS" ]] && green "启用跳跃端口范围：$RANGE_PORTS"
+
+    NODE_NAME=$(get_node_name)
+    hy2_port="$PORT"
+
+    allow_port "$PORT" udp
+
+    # ==================================================================
+    # 自动探测 DNS 设置
+    # ==================================================================
+    ipv4_ok=false
+    ipv6_ok=false
+
+    ping -4 -c1 -W1 8.8.8.8   >/dev/null 2>&1 && ipv4_ok=true
+    ping -6 -c1 -W1 2001:4860:4860::8888 >/dev/null 2>&1 && ipv6_ok=true
+
+    dns_servers=()
+    $ipv4_ok && dns_servers+=("\"8.8.8.8\"")
+    $ipv6_ok && dns_servers+=("\"2001:4860:4860::8888\"")
+    [[ ${#dns_servers[@]} -eq 0 ]] && dns_servers+=("\"8.8.8.8\"")
+
+    if $ipv4_ok && $ipv6_ok; then
+        dns_strategy="prefer_ipv4"
+    elif $ipv4_ok; then
+        dns_strategy="prefer_ipv4"
+    else
+        dns_strategy="prefer_ipv6"
+    fi
+
+
+    # ==================================================================
+    # 生成 TLS 密钥与证书
+    # ==================================================================
+    openssl ecparam -genkey -name prime256v1 -out "${work_dir}/private.key"
+    openssl req -x509 -new -nodes \
+        -key "${work_dir}/private.key" \
+        -sha256 -days 3650 \
+        -subj "/C=US/ST=CA/O=bing.com/CN=bing.com" \
+        -out "${work_dir}/cert.pem"
+
+
+    # ==================================================================
+    # 生成 config.json（保持原风格）
+    # ==================================================================
+cat > "$config_dir" <<EOF
+{
+  "log": { "level": "error", "output": "$work_dir/sb.log" },
+
+  "dns": {
+    "servers": [ $(IFS=,; echo "${dns_servers[*]}") ],
+    "strategy": "$dns_strategy"
+  },
+
+  "inbounds": [
+    {
+      "type": "hysteria2",
+      "tag": "hy2",
+      "listen": "::",
+      "listen_port": $hy2_port,
+
+      "users": [
+        { "password": "$HY2_PASSWORD" }
+      ],
+
+      "masquerade": "https://bing.com",
+
+      "tls": {
+        "enabled": true,
+        "alpn": ["h3"],
+        "certificate_path": "$work_dir/cert.pem",
+        "key_path": "$work_dir/private.key"
+      }
+    }
+  ],
+
+  "outbounds": [
+    { "type": "direct" }
+  ]
+}
+EOF
+
+    green "配置文件已生成：$config_dir"
+
+
+    # ==================================================================
+    # systemd 服务注册
+    # ==================================================================
+cat > /etc/systemd/system/sing-box.service <<EOF
+[Unit]
+Description=Sing-box Service
+After=network.target
+
+[Service]
+ExecStart=$work_dir/sing-box run -c $config_dir
+Restart=always
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable sing-box
+    systemctl restart sing-box
+
+    green "Sing-box 服务已成功启动！"
+}
+
+
+# ======================================================================
 # 卸载 Sing-box + 清理订阅系统
 # ======================================================================
 uninstall_singbox() {
