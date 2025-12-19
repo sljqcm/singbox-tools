@@ -223,15 +223,18 @@ get_port() {
     done
 }
 
+
 # ======================================================================
-# 自动获取节点名称（增强修复版）
-# 说明：
-#   - 保留你原本的逻辑：ipapi.co → ip.sb / ipinfo → 默认名称
-#   - 并确保在任何网络环境下不会卡死
+# 获取节点名称（最终严格规则版）
+# 规则：
+#   1. 国家代码 ≠ 空 且 运营商 ≠ 空 → 国家代码-运营商
+#   2. 国家代码 ≠ 空 且 运营商 = 空 → 国家代码
+#   3. 国家代码 = 空 且 运营商 ≠ 空 → DEFAULT_NODE_NAME
+#   4. 国家代码 = 空 且 运营商 = 空 → DEFAULT_NODE_NAME
 # ======================================================================
 get_node_name() {
 
-    # 默认节点名根据脚本名称推断
+    # 默认节点名称的生成逻辑（与你脚本保持一致）
     local DEFAULT_NODE_NAME
     if [[ "${0##*/}" == *"hy2"* || "${0##*/}" == *"hysteria2"* ]]; then
         DEFAULT_NODE_NAME="$AUTHOR-hy2"
@@ -239,38 +242,59 @@ get_node_name() {
         DEFAULT_NODE_NAME="$AUTHOR"
     fi
 
-    # 若用户通过环境变量指定，则优先使用
+    # 用户提供的 NODE_NAME 优先
     if [[ -n "$NODE_NAME" ]]; then
         echo "$NODE_NAME"
         return
     fi
 
-    local node_name=""
-    local country org
+    local country=""
+    local org=""
 
-    # 尝试通过 ipapi.co 识别地区 + 运营商
-    node_name=$(
-        curl -fs --max-time 2 https://ipapi.co/json 2>/dev/null |
-        sed -n 's/.*"country":"\([^\"]*\)".*"org":"\([^\"]*\)".*/\1-\2/p' |
-        sed 's/[ ]\+/_/g'
-    )
+    # ======================================================
+    # 尝试从 ipapi.co 获取国家代码与运营商
+    # ======================================================
+    country=$(curl -fs --max-time 2 https://ipapi.co/country 2>/dev/null | tr -d '\r\n')
+    org=$(curl -fs --max-time 2 https://ipapi.co/org 2>/dev/null \
+        | sed 's/[ ]\+/_/g')
 
-    # 若 ipapi.co 获取失败，则尝试备用方案
-    if [[ -z "$node_name" ]]; then
+    # ======================================================
+    # fallback 获取方式（ip.sb + ipinfo.io）
+    # ======================================================
+    if [[ -z "$country" ]]; then
         country=$(curl -fs --max-time 2 ip.sb/country 2>/dev/null | tr -d '\r\n')
-        org=$(curl -fs --max-time 2 ipinfo.io/org 2>/dev/null |
-              awk '{$1=""; print $0}' |
-              sed -e 's/^[ ]*//' -e 's/[ ]\+/_/g')
-
-        if [[ -n "$country" && -n "$org" ]]; then
-            node_name="${country}-${org}"
-        fi
     fi
 
-    # 最终 fallback 使用默认名称
-    [[ -z "$node_name" ]] && node_name="$DEFAULT_NODE_NAME"
+    if [[ -z "$org" ]]; then
+        org=$(curl -fs --max-time 2 ipinfo.io/org 2>/dev/null \
+            | awk '{$1=""; print $0}' \
+            | sed -e 's/^[ ]*//' -e 's/[ ]\+/_/g')
+    fi
 
-    echo "$node_name"
+    # ======================================================
+    # 按你的严格规则构造节点名称
+    # ======================================================
+
+    # 情况 1：国家代码 ≠ 空 且 运营商 ≠ 空 → "国家代码-运营商"
+    if [[ -n "$country" && -n "$org" ]]; then
+        echo "${country}-${org}"
+        return
+    fi
+
+    # 情况 2：国家代码 ≠ 空 且 运营商 = 空 → "国家代码"
+    if [[ -n "$country" && -z "$org" ]]; then
+        echo "$country"
+        return
+    fi
+
+    # 情况 3：国家代码 = 空 且 运营商 ≠ 空 → 返回默认名称
+    if [[ -z "$country" && -n "$org" ]]; then
+        echo "$DEFAULT_NODE_NAME"
+        return
+    fi
+
+    # 情况 4：国家代码 = 空 且 运营商 = 空 → 返回默认名称
+    echo "$DEFAULT_NODE_NAME"
 }
 
 # ======================================================================
