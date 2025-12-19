@@ -324,6 +324,45 @@ get_uuid() {
 # -------------------- 跳跃端口格式校验工具 ---------------------------
 # ======================================================================
 
+# ======================================================================
+# 从 url.txt 解析跳跃端口范围 RANGE_PORTS（增强修复版）
+# 说明：
+#   - 从 url.txt 中提取 mport=xxxx,10000-20000 这样的端口区间
+#   - 若没有跳跃端口 → 返回空字符串
+#   - 脚本所有跳跃端口功能都依赖该函数
+# ======================================================================
+parse_range_ports_from_url() {
+
+    # 若 url.txt 不存在 → 认定无跳跃端口
+    if [[ ! -f "$client_dir" ]]; then
+        echo ""
+        return
+    fi
+
+    local url mport_part range
+    url=$(cat "$client_dir")
+
+    # 提取 mport= 的内容，例如：
+    # mport=31020,10000-20000
+    mport_part=$(echo "$url" | sed -n 's/.*mport=\([^&#]*\).*/\1/p')
+
+    # 没有 mport 字段 → 无跳跃端口
+    [[ -z "$mport_part" ]] && {
+        echo ""
+        return
+    }
+
+    # 如果 mport 格式为 主端口,范围
+    # 如：31020,10000-20000
+    if [[ "$mport_part" == *,* ]]; then
+        range="${mport_part#*,}"
+        echo "$range"
+    else
+        # mport 只有主端口，没有范围 → 无跳跃
+        echo ""
+    fi
+}
+
 is_valid_range() {
     [[ "$1" =~ ^([0-9]+)-([0-9]+)$ ]] || return 1
     local min="${BASH_REMATCH[1]}"
