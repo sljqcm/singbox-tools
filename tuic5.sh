@@ -16,7 +16,7 @@ export LANG=en_US.UTF-8
 # 基本信息
 # ======================================================================
 AUTHOR="littleDoraemon"
-VERSION="v1.0.2"
+VERSION="v1.0.3"
 SINGBOX_VERSION="1.12.13"
 
 # ======================================================================
@@ -259,16 +259,45 @@ get_node_name() {
     local country=""
     local org=""
 
+    # ======================================================
+    # 尝试从 ipapi.co 获取国家代码与运营商
+    # ======================================================
     country=$(curl -fs --max-time 2 https://ipapi.co/country 2>/dev/null | tr -d '\r\n')
-    org=$(curl -fs --max-time 2 https://ipapi.co/org 2>/dev/null | sed 's/[ ]\+/_/g')
+    org=$(curl -fs --max-time 2 https://ipapi.co/org 2>/dev/null \
+        | sed 's/[ ]\+/_/g')
 
+    # ======================================================
+    # fallback 获取方式（ip.sb + ipinfo.io）
+    # ======================================================
+    if [[ -z "$country" ]]; then
+        country=$(curl -fs --max-time 2 ip.sb/country 2>/dev/null | tr -d '\r\n')
+    fi
+
+    if [[ -z "$org" ]]; then
+        org=$(curl -fs --max-time 2 ipinfo.io/org 2>/dev/null \
+            | awk '{$1=""; print $0}' \
+            | sed -e 's/^[ ]*//' -e 's/[ ]\+/_/g')
+    fi
+
+    # ======================================================
+    # 按你的严格规则构造节点名称
+    # ======================================================
+
+    # 情况 1：国家代码 ≠ 空 且 运营商 ≠ 空 → "国家代码-运营商"
     if [[ -n "$country" && -n "$org" ]]; then
         echo "${country}-${org}"
         return
     fi
 
-    if [[ -n "$country" ]]; then
+    # 情况 2：国家代码 ≠ 空 且 运营商 = 空 → "国家代码"
+    if [[ -n "$country" && -z "$org" ]]; then
         echo "$country"
+        return
+    fi
+
+    # 情况 3：国家代码 = 空 且 运营商 ≠ 空 → 返回默认名称
+    if [[ -z "$country" && -n "$org" ]]; then
+        echo "$DEFAULT_NODE_NAME"
         return
     fi
 
@@ -557,6 +586,7 @@ check_nodes() {
 
     # 1. 基础节点名（不含跳跃端口）
     BASE_NAME=$(get_node_name)
+    red "节点名称=$BASE_NAME\n"
 
     # 2. 防御性解码（确保是可读态）
     BASE_NAME_DECODED=$(urldecode "$(urlencode "$BASE_NAME")")
