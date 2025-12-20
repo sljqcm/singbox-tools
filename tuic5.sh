@@ -84,6 +84,44 @@ generate_qr() {
 }
 
 # ======================================================================
+# 高可用公网 IP 获取（含多源 fallback）
+# ======================================================================
+get_public_ip() {
+    local ip
+
+    # IPv4 优先：多个源轮询
+    for src in \
+        "curl -4 -fs https://api.ipify.org" \
+        "curl -4 -fs https://ipv4.icanhazip.com" \
+        "curl -4 -fs https://ifconfig.me" \
+        "curl -4 -fs https://ip.sb" \
+        "curl -4 -fs https://checkip.amazonaws.com" \
+    ; do
+        ip=$(eval $src 2>/dev/null)
+        if [[ -n "$ip" ]]; then
+            echo "$ip"
+            return 0
+        fi
+    done
+
+    # IPv6 fallback
+    for src in \
+        "curl -6 -fs https://api64.ipify.org" \
+        "curl -6 -fs https://ipv6.icanhazip.com" \
+        "curl -6 -fs https://ifconfig.me" \
+    ; do
+        ip=$(eval $src 2>/dev/null)
+        if [[ -n "$ip" ]]; then
+            echo "$ip"
+            return 0
+        fi
+    done
+
+    echo ""
+    return 1
+}
+
+# ======================================================================
 # 环境变量加载（原样对齐 hy2）
 # ======================================================================
 load_env_vars() {
@@ -229,6 +267,52 @@ add_jump_rule() {
 }
 
 # ======================================================================
+# 刷新跳跃端口 NAT（在修改主端口时调用）
+# ======================================================================
+refresh_jump_ports_for_new_main_port() {
+    # 必须存在 range_port_file，否则无需处理
+    if [[ ! -f "$range_port_file" ]]; then
+        return
+    fi
+
+    rp=$(cat "$range_port_file")
+    local min="${rp%-*}"
+    local max="${rp#*-}"
+    local new_main_port="$1"
+
+    yellow "检测到跳跃端口区间：${min}-${max}，正在刷新 NAT 映射..."
+
+    # -------------------------
+    # 删除旧 NAT 规则
+    # -------------------------
+    remove_jump_rule
+
+    # -------------------------
+    # 删除旧 INPUT 放行（避免重复）
+    # -------------------------
+    while iptables -C INPUT -p udp --dport ${min}:${max} -j ACCEPT &>/dev/null; do
+        iptables -D INPUT -p udp --dport ${min}:${max} -j ACCEPT
+    done
+    while ip6tables -C INPUT -p udp --dport ${min}:${max} -j ACCEPT &>/dev/null; do
+        ip6tables -D INPUT -p udp --dport ${min}:${max} -j ACCEPT
+    done
+
+    # -------------------------
+    # 重新添加放行规则
+    # -------------------------
+    iptables -I INPUT -p udp --dport ${min}:${max} -j ACCEPT
+    ip6tables -I INPUT -p udp --dport ${min}:${max} -j ACCEPT
+
+    # -------------------------
+    # 重新添加 NAT 转发（映射到新的主端口）
+    # -------------------------
+    add_jump_rule "$min" "$max" "$new_main_port"
+
+    green "跳跃端口区间已更新并映射至新的 TUIC 主端口：${new_main_port}"
+}
+
+
+# ======================================================================
 # 删除跳跃端口 NAT 规则
 # ======================================================================
 remove_jump_rule() {
@@ -245,30 +329,43 @@ remove_jump_rule() {
 }
 
 # ======================================================================
-# 获取节点名称（与 hy2_fixed.sh 逻辑一致）
+# 获取节点名称（持久化优先 > 用户设置 > 自动生成）
 # ======================================================================
 get_node_name() {
 
     local DEFAULT_NODE_NAME="${AUTHOR}-tuic"
 
+    # ======================================================
+    # 1. 持久化节点名称优先（如果用户曾设置过）
+    # ======================================================
+    if [[ -f "$work_dir/node_name" ]]; then
+        saved_name=$(cat "$work_dir/node_name")
+        if [[ -n "$saved_name" ]]; then
+            echo "$saved_name"
+            return
+        fi
+    fi
+
+    # ======================================================
+    # 2. 当前会话设置的节点名称（change_node_name 临时变量）
+    # ======================================================
     if [[ -n "$NODE_NAME" ]]; then
         echo "$NODE_NAME"
         return
     fi
 
+    # ======================================================
+    # 3. 自动生成节点名称（国家代码 + 运营商）
+    # ======================================================
+
     local country=""
     local org=""
 
-    # ======================================================
-    # 尝试从 ipapi.co 获取国家代码与运营商
-    # ======================================================
+    # 先尝试 ipapi
     country=$(curl -fs --max-time 2 https://ipapi.co/country 2>/dev/null | tr -d '\r\n')
-    org=$(curl -fs --max-time 2 https://ipapi.co/org 2>/dev/null \
-        | sed 's/[ ]\+/_/g')
+    org=$(curl -fs --max-time 2 https://ipapi.co/org 2>/dev/null | sed 's/[ ]\+/_/g')
 
-    # ======================================================
-    # fallback 获取方式（ip.sb + ipinfo.io）
-    # ======================================================
+    # fallback
     if [[ -z "$country" ]]; then
         country=$(curl -fs --max-time 2 ip.sb/country 2>/dev/null | tr -d '\r\n')
     fi
@@ -279,23 +376,17 @@ get_node_name() {
             | sed -e 's/^[ ]*//' -e 's/[ ]\+/_/g')
     fi
 
-    # ======================================================
-    # 按你的严格规则构造节点名称
-    # ======================================================
-
-    # 情况 1：国家代码 ≠ 空 且 运营商 ≠ 空 → "国家代码-运营商"
+    # 自动生成节点名称规则
     if [[ -n "$country" && -n "$org" ]]; then
         echo "${country}-${org}"
         return
     fi
 
-    # 情况 2：国家代码 ≠ 空 且 运营商 = 空 → "国家代码"
     if [[ -n "$country" && -z "$org" ]]; then
         echo "$country"
         return
     fi
 
-    # 情况 3：国家代码 = 空 且 运营商 ≠ 空 → 返回默认名称
     if [[ -z "$country" && -n "$org" ]]; then
         echo "$DEFAULT_NODE_NAME"
         return
@@ -570,9 +661,14 @@ EOF
 # ======================================================================
 # 查看节点信息（多客户端 + 二维码，对齐 hy2_fixed.sh）
 # ======================================================================
+# ======================================================================
+# 稳固版 查看节点信息（支持高可用 IP 获取 + 强一致名称）
+# ======================================================================
+# ======================================================================
+# 查看节点信息（稳固版 + 多客户端输出 + 正确节点名称流程）
+# ======================================================================
 check_nodes() {
 
-   #  clear  #todo
     blue "=================== 查看节点信息 ==================="
 
     [[ ! -f "$config_dir" ]] && { red "未找到配置文件"; return; }
@@ -581,99 +677,64 @@ check_nodes() {
     UUID=$(jq -r '.inbounds[0].users[0].uuid' "$config_dir")
 
     # ======================================================
-    # 节点名称处理（解码 → 状态修饰 → 再编码）
+    # 节点名称处理（用户自定义 > 自动生成）
     # ======================================================
-
-    # 1. 基础节点名（不含跳跃端口）
     BASE_NAME=$(get_node_name)
-    green "节点名称=$BASE_NAME\n"
 
-    # 2. 防御性解码（确保是可读态）
+    # 确保可读性（解码-编码是安全校验步骤）
     BASE_NAME_DECODED=$(urldecode "$(urlencode "$BASE_NAME")")
-
-    # 3. 构造最终节点名（人类可读）
     FINAL_NAME="$BASE_NAME_DECODED"
 
-    # 检查是否存在跳跃端口文件
+    # 如果启用了跳跃端口，追加 (min-max)
     if [[ -f "$range_port_file" ]]; then
         RANGE=$(cat "$range_port_file")
         FINAL_NAME="${FINAL_NAME}(${RANGE})"
     fi
 
-    # 4. 只编码 fragment 内容（不含 #）
+    # fragment 编码（用于 TUIC 链接）
     ENCODED_NAME=$(urlencode "$FINAL_NAME")
-    DECODED_NAME="$FINAL_NAME"
+
+    green "节点名称 = $FINAL_NAME"
+    echo ""
 
     # ======================================================
-    # IP 检测
+    # 获取公网 IP（高可用 fallback）
     # ======================================================
+    ip=$(get_public_ip)
 
-    ipv4=$(curl -4 -s https://api.ipify.org)
-    ipv6=$(curl -6 -s https://api64.ipify.org)
-
-    local ip4_ok=false
-    local ip6_ok=false
-    [[ -n "$ipv4" ]] && ip4_ok=true
-    [[ -n "$ipv6" ]] && ip6_ok=true
-
-    # ======================================================
-    # TUIC URL（IPv4 / IPv6）
-    # ======================================================
-
-    tuic_url_ipv4=""
-    tuic_url_ipv6=""
-
-    if $ip4_ok; then
-        tuic_url_ipv4="tuic://${UUID}:${UUID}@${ipv4}:${PORT}?congestion_control=bbr&alpn=h3&allow_insecure=1#${ENCODED_NAME}"
-    fi
-
-    if $ip6_ok; then
-        tuic_url_ipv6="tuic://${UUID}:${UUID}@[$ipv6]:${PORT}?congestion_control=bbr&alpn=h3&allow_insecure=1#${ENCODED_NAME}"
-    fi
-
-    # 默认写 IPv4（与原逻辑一致）
-    if $ip4_ok; then
-        echo "$tuic_url_ipv4" > "$client_dir"
-    else
-        echo "$tuic_url_ipv6" > "$client_dir"
+    if [[ -z "$ip" ]]; then
+        red "无法获取公网 IP，无法生成节点链接。"
+        red "请检查 VPS 出网连通性。"
+        return
     fi
 
     # ======================================================
-    # 输出
+    # 生成 TUIC URL（主链接）
     # ======================================================
+    tuic_url="tuic://${UUID}:${UUID}@${ip}:${PORT}?congestion_control=bbr&alpn=h3&allow_insecure=1#${ENCODED_NAME}"
 
-    purple "\nTUIC 原始链接（节点名称：${DECODED_NAME}）"
-    sleep 100
+    # 写入 url.txt（最终持久化）
+    echo "$tuic_url" > "$client_dir"
 
-    if $ip4_ok; then
-        yellow "===== IPv4 TUIC（推荐） ====="
-        green "$tuic_url_ipv4"
-        generate_qr "$tuic_url_ipv4"
-        echo ""
-    fi
-
-    if $ip6_ok; then
-        yellow "===== IPv6 TUIC（备用） ====="
-        green "$tuic_url_ipv6"
-        generate_qr "$tuic_url_ipv6"
-        echo ""
-    fi
+    purple "\nTUIC 原始链接（节点名称：${FINAL_NAME}）"
+    green "$tuic_url"
+    generate_qr "$tuic_url"
+    echo ""
 
     yellow "====================================================================="
 
     # ======================================================
-    # 订阅 URL
+    # 订阅 URL（nginx 提供）
     # ======================================================
-
-    sub_port=$(cat "$sub_port_file")
-
-    if $ip4_ok; then
-        base_url="http://${ipv4}:${sub_port}/${UUID}"
+    if [[ -f "$sub_port_file" ]]; then
+        sub_port=$(cat "$sub_port_file")
+        green "订阅端口为：${sub_port}"
     else
-        base_url="http://[$ipv6]:${sub_port}/${UUID}"
+        red "未找到订阅端口文件 sub.port"
+        return
     fi
 
-    generate_all_subscription_files "$base_url"
+    base_url="http://${ip}:${sub_port}/${UUID}"
 
     purple "订阅链接（通用）："
     green "$base_url"
@@ -682,9 +743,8 @@ check_nodes() {
     yellow "====================================================================="
 
     # ======================================================
-    # 多客户端订阅
+    # 多客户端订阅 URL（Clash / Sing-box / Surge）
     # ======================================================
-
     clash_url="https://sublink.eooce.com/clash?config=${base_url}"
     singbox_url="https://sublink.eooce.com/singbox?config=${base_url}"
     surge_url="https://sublink.eooce.com/surge?config=${base_url}"
@@ -710,17 +770,17 @@ check_nodes() {
     # ======================================================
     # 状态提示
     # ======================================================
-
     if [[ -f "$range_port_file" ]]; then
-        yellow "提示：节点名称中显示的跳跃端口区间仅代表上次配置状态"
-        yellow "系统重启后需重新添加跳跃端口"
+        yellow "提示：节点名称中的跳跃端口区间仅表示当前配置状态。"
+        yellow "系统重启后需重新添加跳跃端口。"
     fi
 
     if ! systemctl is-active nginx >/dev/null 2>&1; then
-        yellow "提示：nginx 当前未运行，订阅链接可能无法访问"
+        yellow "提示：nginx 当前未运行，订阅链接可能无法访问。"
     fi
-}
 
+    echo ""
+}
 
 
 # ======================================================================
@@ -826,17 +886,10 @@ change_config() {
 
         case "$sel" in
             1)
-                read -rp "请输入新的 TUIC 主端口（UDP）：" new_port
-                is_valid_port "$new_port" || { red "端口无效"; continue; }
-                is_port_occupied "$new_port" && { red "端口已被占用"; continue; }
-
-                jq ".inbounds[0].listen_port=$new_port" "$config_dir" > /tmp/tuic_cfg && mv /tmp/tuic_cfg "$config_dir"
-                allow_port "$new_port"
-                systemctl restart sing-box-tuic
-                green "TUIC 主端口已修改为：$new_port"
+                change_main_tuic_port
                 ;;
             2)
-                read -rp "请输入新的 UUID：" new_uuid
+                read -rp "$(red_input "请输入新的 UUID：")" new_uuid
                 is_valid_uuid "$new_uuid" || { red "UUID 格式错误"; continue; }
 
                 jq ".inbounds[0].users[0].uuid=\"$new_uuid\" | .inbounds[0].users[0].password=\"$new_uuid\"" \
@@ -847,28 +900,11 @@ change_config() {
                 green "UUID 已成功修改"
                 ;;
             3)
-                read -rp "请输入新的节点名称：" NODE_NAME
-                green "节点名称已修改为：$NODE_NAME"
+                read -rp "$(red_input "请输入新的节点名称：")" new_name
+                change_node_name "$new_name"
                 ;;
             4)
-                echo ""
-                yellow "跳跃端口说明："
-                yellow "- 仅用于 TUIC 的 UDP 数据通信"
-                yellow "- 系统重启后不会自动恢复"
-                echo ""
-
-                read -rp "起始 UDP 端口：" jmin
-                read -rp "结束 UDP 端口：" jmax
-                is_valid_range "${jmin}-${jmax}" || { red "端口区间格式错误"; continue; }
-
-                #跳跃端口写入文件（覆盖，>为覆盖写入，>>为追加写入，）
-                echo "${jmin}-${jmax}" > "$range_port_file"
-                iptables -I INPUT -p udp --dport ${jmin}:${jmax} -j ACCEPT
-                ip6tables -I INPUT -p udp --dport ${jmin}:${jmax} -j ACCEPT
-                add_jump_rule "$jmin" "$jmax" "$(jq -r '.inbounds[0].listen_port' "$config_dir")"
-
-                green "跳跃端口已启用：${jmin}-${jmax}"
-                yellow "注意：该设置仅在当前系统运行期间有效"
+                add_jump_port
                 ;;
             5)
                 if [[ -f "$range_port_file" ]]; then
@@ -876,23 +912,153 @@ change_config() {
                     min="${rp%-*}"
                     max="${rp#*-}"
 
-                    iptables -D INPUT -p udp --dport ${min}:${max} -j ACCEPT 2>/dev/null
-                    ip6tables -D INPUT -p udp --dport ${min}:${max} -j ACCEPT 2>/dev/null
+                    # 删除所有 INPUT 放行规则
+                    while iptables -C INPUT -p udp --dport ${min}:${max} -j ACCEPT &>/dev/null; do
+                        iptables -D INPUT -p udp --dport ${min}:${max} -j ACCEPT
+                    done
+                    while ip6tables -C INPUT -p udp --dport ${min}:${max} -j ACCEPT &>/dev/null; do
+                        ip6tables -D INPUT -p udp --dport ${min}:${max} -j ACCEPT
+                    done
+
+                    # 删除 NAT 跳跃规则
                     remove_jump_rule
-                    #删除跳跃端口文件
+
+                    # 删除持久文件
                     rm -f "$range_port_file"
 
-                    green "跳跃端口已删除"
+                    green "跳跃端口已彻底删除：${min}-${max}"
                 else
                     yellow "当前未启用跳跃端口"
                 fi
                 ;;
+
             0) return ;;
             88) exit 0 ;;
             *) red "无效输入，请重新选择" ;;
         esac
     done
 }
+
+
+change_main_tuic_port(){
+    read -rp "$(red_input "请输入新的 TUIC 主端口（UDP）：")" new_port
+    is_valid_port "$new_port" || { red "端口无效"; continue; }
+    is_port_occupied "$new_port" && { red "端口已被占用"; continue; }
+
+    # 旧主端口
+    old_port=$(jq -r '.inbounds[0].listen_port' "$config_dir")
+
+    # 更新配置文件
+    jq ".inbounds[0].listen_port=$new_port" "$config_dir" > /tmp/tuic_cfg && mv /tmp/tuic_cfg "$config_dir"
+
+    # 放行新端口
+    allow_port "$new_port"
+
+    # -------------------------
+    # 自动刷新跳跃端口 NAT 映射
+    # -------------------------
+    refresh_jump_ports_for_new_main_port "$new_port"
+
+    # 重启服务
+    systemctl restart sing-box-tuic
+
+    green "TUIC 主端口已从 ${old_port} 修改为：${new_port}"
+}
+
+# ======================================================================
+# 修改节点名称（持久化写入 + 会话变量 + 自动刷新）
+# ======================================================================
+change_node_name() {
+    local new_name="$1"
+
+    if [[ -z "$new_name" ]]; then
+        red "节点名称不能为空"
+        return 1
+    fi
+
+    # ======================================================
+    # 1. 写入当前会话变量（本次运行有效）
+    # ======================================================
+    NODE_NAME="$new_name"
+
+    # ======================================================
+    # 2. 写入持久化文件（脚本重启依然有效）
+    # ======================================================
+    echo "$new_name" > "$work_dir/node_name"
+
+    green "节点名称已修改为：$new_name"
+    yellow "正在刷新节点信息……"
+    sleep 0.3
+
+    # ======================================================
+    # 3. 调用 check_nodes → 统一生成 TUIC URL（含节点名称）
+    # ======================================================
+    check_nodes
+}
+
+# ======================================================================
+# 完美化版 添加跳跃端口（无残留 + 冲突检查 + 自动清理旧规则）
+# ======================================================================
+add_jump_port() {
+    echo ""
+    yellow "跳跃端口说明："
+    yellow "- 仅用于 TUIC 的 UDP 数据通信"
+    yellow "- 系统重启后不会自动恢复"
+    echo ""
+
+    read -rp "起始 UDP 端口：" jmin
+    read -rp "结束 UDP 端口：" jmax
+
+    # 校验格式
+    is_valid_range "${jmin}-${jmax}" || { red "端口区间格式错误"; return; }
+
+    # 主端口冲突检测
+    local main_port
+    main_port=$(jq -r '.inbounds[0].listen_port' "$config_dir")
+
+    if [[ $jmin -le $main_port && $main_port -le $jmax ]]; then
+        red "错误：跳跃端口区间不能包含 TUIC 主端口（$main_port）！"
+        return
+    fi
+
+    # ======================================================
+    # 清理旧跳跃端口规则（避免残留）
+    # ======================================================
+    if [[ -f "$range_port_file" ]]; then
+        old_range=$(cat "$range_port_file")
+        old_min="${old_range%-*}"
+        old_max="${old_range#*-}"
+
+        # 删除旧 INPUT 放行规则
+        while iptables -C INPUT -p udp --dport ${old_min}:${old_max} -j ACCEPT &>/dev/null; do
+            iptables -D INPUT -p udp --dport ${old_min}:${old_max} -j ACCEPT
+        done
+        while ip6tables -C INPUT -p udp --dport ${old_min}:${old_max} -j ACCEPT &>/dev/null; do
+            ip6tables -D INPUT -p udp --dport ${old_min}:${old_max} -j ACCEPT
+        done
+
+        # 删除旧 NAT 跳跃规则
+        remove_jump_rule
+
+        yellow "已清理旧跳跃端口规则：${old_min}-${old_max}"
+    fi
+
+    # ======================================================
+    # 写入新跳跃端口
+    # ======================================================
+    echo "${jmin}-${jmax}" > "$range_port_file"
+
+    # 添加 INPUT 放行规则
+    iptables -I INPUT -p udp --dport ${jmin}:${jmax} -j ACCEPT
+    ip6tables -I INPUT -p udp --dport ${jmin}:${jmax} -j ACCEPT
+
+    # 添加 NAT 规则
+    add_jump_rule "$jmin" "$jmax" "$main_port"
+
+    green "跳跃端口已启用：${jmin}-${jmax}"
+    yellow "注意：该设置仅在当前系统运行期间有效"
+}
+
 
 # ======================================================================
 # 卸载 TUIC（与 hy2_fixed.sh 行为对齐）
@@ -967,6 +1133,8 @@ quick_install() {
     handle_range_ports
     add_nginx_conf
     check_nodes
+    # 持久化节点名称
+    get_node_name > "$work_dir/node_name"
 }
 
 # ======================================================================
@@ -1016,6 +1184,8 @@ main_loop() {
                 install_singbox
                 add_nginx_conf
                 check_nodes
+                # 持久化节点名称
+                get_node_name > "$work_dir/node_name"
                 ;;
             2) uninstall_tuic ;;
             3) manage_singbox ;;
