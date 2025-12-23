@@ -11,7 +11,7 @@ export LANG=en_US.UTF-8
 # ============================================================
 
 AUTHOR="littleDoraemon"
-VERSION="1.0.2"
+VERSION="1.0.3"
 
 
 SINGBOX_VERSION="1.12.13"
@@ -24,6 +24,9 @@ client_dir="$work_dir/url.txt"
 sub_file="$work_dir/sub.txt"
 sub_port_file="$work_dir/sub.port"
 range_port_file="$work_dir/range_ports"
+
+node_name_file="$work_dir/node_name"
+
 
 # NAT comment
 NAT_COMMENT="hy2_jump"
@@ -462,6 +465,8 @@ EOF
     systemctl restart sing-box
 
     green "Sing-box HY2 服务已启动"
+
+    init_node_name_on_install
 }
 # ============================================================
 # 查看节点信息 / 多客户端订阅 / 二维码
@@ -489,18 +494,14 @@ check_nodes() {
         return
     }
 
-    # -------------------------
-    # 节点名称
-    # -------------------------
-    local NODE_NAME_FINAL RANGE ENCODED_NAME
-    NODE_NAME_FINAL="HY2"
 
-    if [[ -f "$range_port_file" ]]; then
-        RANGE=$(cat "$range_port_file")
-        NODE_NAME_FINAL="${NODE_NAME_FINAL}(${RANGE})"
-    fi
-
+    # -------------------------
+    # 节点名称（统一入口）
+    # -------------------------
+    local NODE_NAME_FINAL ENCODED_NAME
+    NODE_NAME_FINAL=$(get_node_name)
     ENCODED_NAME=$(urlencode "$NODE_NAME_FINAL")
+
 
     # -------------------------
     # 原始 HY2 URL
@@ -580,6 +581,70 @@ EOF
     yellow "========================================================"
 
     [[ "$mode" != "silent" ]] && pause_return
+}
+
+
+get_node_name() {
+    local name
+
+    if [[ -f "$work_dir/node_name" ]]; then
+        name=$(cat "$work_dir/node_name")
+    else
+        name="${AUTHOR}-hy2"
+    fi
+
+    # 跳跃端口只作为展示后缀
+    if [[ -f "$range_port_file" ]]; then
+        name="${name}($(cat "$range_port_file"))"
+    fi
+
+    echo "$name"
+}
+
+
+
+init_node_name_on_install() {
+
+    local DEFAULT_NODE_NAME="${AUTHOR}-hy2"
+    local country="" org="" name=""
+
+    # 已存在则不覆盖（重装/升级保护）
+    [[ -f "$work_dir/node_name" ]] && return
+
+    # 1. ENV 优先
+    if [[ -n "$NODE_NAME" ]]; then
+        echo "$NODE_NAME" > "$work_dir/node_name"
+        green "节点名称初始化为：$NODE_NAME"
+        return
+    fi
+
+    # 2. IP 推断
+    country=$(curl -fs --max-time 2 https://ipapi.co/country 2>/dev/null | tr -d '\r\n')
+    org=$(curl -fs --max-time 2 https://ipapi.co/org 2>/dev/null | sed 's/[ ]\+/_/g')
+
+    if [[ -z "$country" ]]; then
+        country=$(curl -fs --max-time 2 ip.sb/country 2>/dev/null | tr -d '\r\n')
+    fi
+
+    if [[ -z "$org" ]]; then
+        org=$(curl -fs --max-time 2 ipinfo.io/org 2>/dev/null \
+            | awk '{$1=""; print $0}' \
+            | sed -e 's/^[ ]*//' -e 's/[ ]\+/_/g')
+    fi
+
+    # 3. 组合规则（修正你原来的不一致）
+    if [[ -n "$country" && -n "$org" ]]; then
+        name="${country}-${org}"
+    elif [[ -n "$country" ]]; then
+        name="$country"
+    elif [[ -n "$org" ]]; then
+        name="$org"
+    else
+        name="$DEFAULT_NODE_NAME"
+    fi
+
+    echo "$name" > "$work_dir/node_name"
+    green "节点名称初始化为：$name"
 }
 
 
