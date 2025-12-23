@@ -1109,6 +1109,12 @@ main_menu() {
         blue "===================================================="
         echo ""
 
+        systemctl is-active sing-box >/dev/null 2>&1 && sb="$(green 运行中)" || sb="$(red 未运行)"
+        systemctl is-active nginx >/dev/null 2>&1 && ng="$(green 运行中)" || ng="$(red 未运行)"
+
+        yellow " Sing-box 状态：$sb"
+        yellow " Nginx 状态：   $ng"
+        echo ""
         green " 1. 安装 Sing-box (HY2)"
         red   " 2. 卸载 Sing-box"
         yellow "----------------------------------------"
