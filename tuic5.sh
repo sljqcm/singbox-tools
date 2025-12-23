@@ -16,7 +16,7 @@ export LANG=en_US.UTF-8
 # 基本信息
 # ======================================================================
 AUTHOR="littleDoraemon"
-VERSION="v1.0.12"
+VERSION="v1.0.1"
 SINGBOX_VERSION="1.12.13"
 
 # ======================================================================
@@ -933,9 +933,15 @@ change_config() {
                 change_main_tuic_port
                 ;;
             2)
-                read -rp "$(red_input "请输入新的 UUID：")" new_uuid
-                is_valid_uuid "$new_uuid" || { red "UUID 格式错误"; continue; }
+                read -rp "$(red_input "请输入新的 UUID（回车自动生成）：")" new_uuid
 
+                if [[ -z "$new_uuid" ]]; then
+                    new_uuid=$(cat /proc/sys/kernel/random/uuid)
+                    green "已自动生成 UUID：$new_uuid"
+                else
+                    is_valid_uuid "$new_uuid" || { red "UUID 格式错误"; continue; }
+                fi
+                
                 jq ".inbounds[0].users[0].uuid=\"$new_uuid\" | .inbounds[0].users[0].password=\"$new_uuid\"" \
                     "$config_dir" > /tmp/tuic_cfg && mv /tmp/tuic_cfg "$config_dir"
 
