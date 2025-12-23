@@ -1060,7 +1060,9 @@ main_menu() {
         case "$choice" in
             1)
                 install_singbox
-                pause_return
+                # 安装后统一处理（对齐自动模式）
+                apply_range_ports_if_needed
+                check_nodes
                 ;;
             2)
                 uninstall_singbox
