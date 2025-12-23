@@ -10,7 +10,7 @@ export LANG=en_US.UTF-8
 # ============================================================
 
 AUTHOR="littleDoraemon"
-VERSION="1.0.4"
+VERSION="1.0.5"
 
 
 SINGBOX_VERSION="1.12.13"
@@ -1330,25 +1330,25 @@ get_nginx_status_colored() {
 
     local conf="/etc/nginx/conf.d/singbox_hy2_sub.conf"
 
-    # 1️⃣ nginx 未安装
-    if ! command_exists nginx; then
+    # 1️⃣ nginx 未安装（没有二进制）
+    if ! command -v nginx >/dev/null 2>&1; then
         red "未安装"
         return
     fi
 
-    # 2️⃣ nginx 服务未运行
-    if ! systemctl is-active nginx >/dev/null 2>&1; then
+    # 2️⃣ nginx 进程不存在（这是唯一硬指标）
+    if ! pgrep -x nginx >/dev/null 2>&1; then
         red "未运行"
         return
     fi
 
-    # 3️⃣ nginx 正在运行，但未启用订阅
+    # 3️⃣ nginx 在跑，但订阅没启用
     if [[ ! -f "$conf" ]]; then
         yellow "运行中（未启用订阅）"
         return
     fi
 
-    # 4️⃣ nginx + 订阅配置都正常
+    # 4️⃣ nginx + 订阅都存在
     green "运行中"
 }
 
