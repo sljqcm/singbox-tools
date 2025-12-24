@@ -25,7 +25,7 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v2.3.18"
+VERSION="v2.3.19"
 SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
@@ -711,7 +711,7 @@ change_config() {
 }
 
 change_port(){
-  read -rp "$(red_input "新端口：")" p
+  read -rp "$(red_input "请输入新端口号(回车则默认自动生成)：")" p
 
   if ! is_port "$p"; then
     red "端口格式无效"
@@ -793,24 +793,72 @@ change_node_name(){
   pause
 }
 
-change_sni(){
-  read -rp "$(red_input "新 SNI：")" n
 
-  if [[ -z "$n" ]]; then
-    yellow "SNI 未修改（输入为空）"
-    pause
-    return
-  fi
+change_sni(){
+  clear
+  blue "========== 修改 SNI =========="
+  echo ""
 
   local old_sni
   old_sni=$(get_sni)
 
-  echo "$n" > "$SNI_FILE"
+  yellow "当前 SNI：$old_sni"
+  echo ""
+
+  green " 1. www.bing.com        （默认 / 推荐）"
+  green " 2. www.microsoft.com"
+  green " 3. www.cloudflare.com"
+  green " 4. www.apple.com"
+  green " 5. www.amazon.com"
+  yellow "----------------------------------"
+  green " 6. 自定义输入"
+  red   " 0. 取消修改"
+  echo ""
+
+  read -rp "$(red_input "请选择 SNI：")" sel
+
+  local new_sni=""
+
+  case "$sel" in
+    1) new_sni="www.bing.com" ;;
+    2) new_sni="www.microsoft.com" ;;
+    3) new_sni="www.office.com" ;;
+    4) new_sni="www.apple.com" ;;
+    5) new_sni="www.visa.com" ;;
+    6)
+      read -rp "$(red_input "请输入自定义 SNI：")" new_sni
+      if [[ -z "$new_sni" ]]; then
+        yellow "未输入 SNI，已取消修改"
+        pause
+        return
+      fi
+      ;;
+    0)
+      yellow "已取消修改 SNI"
+      pause
+      return
+      ;;
+    *)
+      red "无效选择"
+      pause
+      return
+      ;;
+  esac
+
+  # 如果没变化，直接返回
+  if [[ "$new_sni" == "$old_sni" ]]; then
+    yellow "新 SNI 与当前一致，未做修改"
+    pause
+    return
+  fi
+
+  # 写入并刷新
+  echo "$new_sni" > "$SNI_FILE"
   make_config
 
   green "SNI 已成功修改"
   brown "旧 SNI：$old_sni"
-  brown "新 SNI：$n"
+  brown "新 SNI：$new_sni"
   yellow "正在应用配置…"
 
   refresh_all
