@@ -25,7 +25,7 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v1.0.1"
+VERSION="v1.0.2"
 SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
@@ -506,7 +506,8 @@ generate_nodes() {
   ip6=$(get_ip6)
 
   name_raw=$(get_node_name)
-  name=$(urlencode "$name_raw")
+  #name=$(urlencode "$name_raw")
+  name="$name_raw"
 
 
 
