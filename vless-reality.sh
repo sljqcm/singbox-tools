@@ -25,7 +25,7 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v2.3.16"
+VERSION="v2.3.17"
 SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
@@ -228,13 +228,18 @@ download_singbox() {
   local out="$3"
 
   local urls=(
-    "https://ghproxy.com/https://github.com/SagerNet/sing-box/releases/download/v${ver}/sing-box-${ver}-linux-${arch}.tar.gz"
-    "https://mirror.ghproxy.com/https://github.com/SagerNet/sing-box/releases/download/v${ver}/sing-box-${ver}-linux-${arch}.tar.gz"
+    # 1️⃣ ghproxy.net（当前最稳）
+    "https://ghproxy.net/https://github.com/SagerNet/sing-box/releases/download/v${ver}/sing-box-${ver}-linux-${arch}.tar.gz"
+
+    # 2️⃣ GitHub 原生
     "https://github.com/SagerNet/sing-box/releases/download/v${ver}/sing-box-${ver}-linux-${arch}.tar.gz"
+
+    # 3️⃣ fastgit（可选兜底）
+    "https://download.fastgit.org/SagerNet/sing-box/releases/download/v${ver}/sing-box-${ver}-linux-${arch}.tar.gz"
   )
 
   for u in "${urls[@]}"; do
-    yellow "尝试下载：$u"
+    yellow "尝试下载 sing-box：$u"
     if curl -fL --retry 2 --connect-timeout 10 -o "$out" "$u"; then
       return 0
     fi
@@ -452,8 +457,10 @@ LimitNOFILE=1048576
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl daemon-reload
-systemctl enable ${SERVICE_NAME}
+
+  systemctl daemon-reload
+  systemctl enable ${SERVICE_NAME}
+  systemctl start ${SERVICE_NAME}
 }
 
 
@@ -823,6 +830,9 @@ interactive_install(){
   install_common
   refresh_all
   
+  # 启动服务（交互安装期望的行为）
+  systemctl start ${SERVICE_NAME}
+  systemctl start nginx
 }
 
 print_subscribe_status() {
