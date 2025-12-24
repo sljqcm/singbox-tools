@@ -5,18 +5,26 @@ export LANG=en_US.UTF-8
 # Sing-box TUIC v5 一键脚本
 # 作者：littleDoraemon
 # 说明：
-#   - 结构 / 行为 / 主控流程 与 hy2_fixed.sh 对齐
 #   - 支持自动 / 交互模式
+#   - 支持跳跃端口：使用nat端口转发给主端口，也就是服务端一下子给你把跳跃端口范围的端口都指向了主端口号的转发(跟hy2的服务器天然支持跳跃端口功能不太一样)
 #   - 支持环境变量：PORT / UUID / RANGE_PORTS / NODE_NAME
-#   - TUIC 使用 UDP
-#   - nginx 提供订阅（HTTP / TCP）
+#  
+#  1、安装方式（2种）
+#     1.1 交互式菜单安装：
+#     curl -fsSL https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/tuic5.sh -o tuic5.sh && chmod +x tuic5.sh && ./tuic5.sh
+#    
+#     1.2 非交互式全自动安装:
+#     PORT=31020 RANGE_PORTS=40000-41000 NODE_NAME="小叮当的节点" bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/tuic5.sh)
+#
+# 
+#  
 # ======================================================================
 
 # ======================================================================
 # 基本信息
 # ======================================================================
 AUTHOR="littleDoraemon"
-VERSION="v1.0.10"
+VERSION="v1.0.1"
 SINGBOX_VERSION="1.12.13"
 
 # ======================================================================

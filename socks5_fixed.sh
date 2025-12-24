@@ -11,24 +11,26 @@
 # 2、卸载：
 #   bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/socks5.sh) uninstall
 #
-# 3、命令行中如何测试socks5串通不通？？只要选下方的命令执行，成功返回ip就代表成功，不用在意是否返回的时候什么ip，比如你明明是ipv6环境的服务器确返回了一个ipv4.这种情况其实也是对的。
+# 3、命令行中如何测试socks5串通不通？？只要选下方的命令执行，成功返回ip就代表成功，不用在意是否返回的是什么ip，比如你明明是ipv6环境的服务器确返回了一个ipv4.这种情况其实也是对的。
 #  curl --socks5-hostname "ipv4:端口号"  -U 用户名:密码 http://ip.sb
 #  curl -6 --socks5-hostname "[ipv6]:端口号" -U 用户名:密码 http://ip.sb
 #
-
 
 set -euo pipefail
 
 # ================== 基本变量 ==================
 INSTALL_DIR="/usr/local/sb"
 CONFIG_FILE="$INSTALL_DIR/config.json"
-BIN_FILE="$INSTALL_DIR/sing-box"
+
+# 防冲突二进制名
+BIN_FILE="$INSTALL_DIR/sing-box-socks5"
+
 LOG_FILE="$INSTALL_DIR/run.log"
 
 SERVICE_SYSTEMD="/etc/systemd/system/sing-box-socks5.service"
 SERVICE_OPENRC="/etc/init.d/sing-box-socks5"
 
-# sing-box 版本（只在这里改）
+# sing-box 版本
 SB_VERSION="1.12.13"
 SB_VER="v${SB_VERSION}"
 
@@ -55,12 +57,87 @@ fi
 green(){ echo -e "\e[1;32m$1\033[0m"; }
 yellow(){ echo -e "\e[1;33m$1\033[0m"; }
 blue(){ echo -e "\e[1;34m$1\033[0m"; }
-# ================== 参数检查 ==================
+
+# ================== 随机函数 ==================
+# 10 位用户名：数字 + 大小写字母
+gen_username() {
+  tr -dc 'A-Za-z0-9' </dev/urandom | head -c 10
+}
+
+# 10 位密码：数字 + 大小写字母 + 安全符号
+gen_password() {
+  tr -dc 'A-Za-z0-9!@#%^_-+=' </dev/urandom | head -c 10
+}
+
+# 随机端口
+gen_port() {
+  shuf -i 20000-50000 -n 1
+}
+
+check_port_free() {
+  ! ss -lnt | awk '{print $4}' | grep -q ":$1$"
+}
+
+# ================== 自动判断交互 / 非交互 ==================
 if [[ -z "${PORT:-}" || -z "${USERNAME:-}" || -z "${PASSWORD:-}" ]]; then
-  echo "❌ 缺少参数"
-  echo "用法："
-  echo "PORT=16805 USERNAME=user PASSWORD=pass bash socks5.sh"
+  INTERACTIVE=1
+else
+  INTERACTIVE=0
+fi
+
+# 非 TTY 环境保护
+if [[ "$INTERACTIVE" == "1" && ! -t 0 ]]; then
+  echo "❌ 非交互终端环境但缺少必要参数"
+  echo "请使用：PORT= USERNAME= PASSWORD= bash socks5.sh"
   exit 1
+fi
+
+# ================== 参数处理 ==================
+if [[ "$INTERACTIVE" == "1" ]]; then
+  echo "[INFO] 交互式安装模式（回车自动生成）"
+
+  # ---------- 端口 ----------
+  if [[ -z "${PORT:-}" ]]; then
+    while true; do
+      read -rp "请输入端口号（回车自动生成）: " PORT
+      if [[ -z "$PORT" ]]; then
+        PORT="$(gen_port)"
+        echo "[INFO] 已生成端口: $PORT"
+        break
+      fi
+      if [[ "$PORT" =~ ^[0-9]+$ ]] && check_port_free "$PORT"; then
+        break
+      fi
+      echo "❌ 端口非法或已被占用"
+      PORT=""
+    done
+  fi
+
+  # ---------- 用户名 ----------
+  if [[ -z "${USERNAME:-}" ]]; then
+    read -rp "请输入用户名（回车自动生成 10 位字母数字）: " USERNAME
+    if [[ -z "$USERNAME" ]]; then
+      USERNAME="$(gen_username)"
+      echo "[INFO] 已生成用户名: $USERNAME"
+    fi
+  fi
+
+  # ---------- 密码 ----------
+  if [[ -z "${PASSWORD:-}" ]]; then
+    read -rsp "请输入密码（回车自动生成 10 位复杂密码）: " PASSWORD
+    echo
+    if [[ -z "$PASSWORD" ]]; then
+      PASSWORD="$(gen_password)"
+      echo "[INFO] 已生成密码"
+    fi
+  fi
+
+else
+  echo "[INFO] 非交互式安装模式"
+
+  PORT="${PORT:-$(gen_port)}"
+  USERNAME="${USERNAME:-$(gen_username)}"
+  PASSWORD="${PASSWORD:-$(gen_password)}"
 fi
 
 # ================== 安装依赖 ==================
@@ -79,7 +156,7 @@ case "$ARCH_RAW" in
   x86_64|amd64) ARCH="amd64" ;;
   i386|i686) ARCH="386" ;;
   aarch64|arm64) ARCH="arm64" ;;
-  armv7l|armv7|armhf) ARCH="armv7" ;;
+  armv7l|armhf) ARCH="armv7" ;;
   armv6l) ARCH="armv6" ;;
   riscv64) ARCH="riscv64" ;;
   mips64el|mips64le) ARCH="mips64le" ;;
@@ -91,20 +168,13 @@ esac
 # ================== IPv6 自动检测 ==================
 IPV6_AVAILABLE=0
 if [[ -f /proc/net/if_inet6 ]] \
-   && ip -6 addr show scope global | grep -q inet6 \
-   && curl -s6 --max-time 3 https://ipv6.ip.sb >/dev/null 2>&1; then
+  && ip -6 addr show scope global | grep -q inet6 \
+  && curl -s6 --max-time 3 https://ipv6.ip.sb >/dev/null 2>&1; then
   IPV6_AVAILABLE=1
 fi
 
-if [[ "$IPV6_AVAILABLE" -eq 1 ]]; then
-  LISTEN_ADDR="::"
-  echo "[INFO] IPv6 可用，启用 IPv4 / IPv6 双栈"
-else
-  LISTEN_ADDR="0.0.0.0"
-  echo "[INFO] IPv6 不可用，仅监听 IPv4"
-fi
+LISTEN_ADDR=$([[ "$IPV6_AVAILABLE" -eq 1 ]] && echo "::" || echo "0.0.0.0")
 
-# ================== 获取公网 IP ==================
 IP_V4=$(curl -s4 ipv4.ip.sb || true)
 IP_V6=$(curl -s6 ipv6.ip.sb || true)
 
@@ -117,6 +187,7 @@ curl -L --retry 3 -o sb.tar.gz "$URL"
 
 tar -xzf sb.tar.gz --strip-components=1
 chmod +x sing-box
+mv sing-box "$BIN_FILE"
 rm -f sb.tar.gz
 
 # ================== 生成配置 ==================
@@ -126,7 +197,6 @@ cat > "$CONFIG_FILE" <<EOF
   "inbounds": [
     {
       "type": "socks",
-      "tag": "socks-in",
       "listen": "$LISTEN_ADDR",
       "listen_port": $PORT,
       "users": [
@@ -137,16 +207,12 @@ cat > "$CONFIG_FILE" <<EOF
       ]
     }
   ],
-  "outbounds": [
-    { "type": "direct" }
-  ]
+  "outbounds": [{ "type": "direct" }]
 }
 EOF
 
 # ================== 启动服务 ==================
 if command -v systemctl >/dev/null 2>&1; then
-  echo "[INFO] 使用 systemd 启动"
-
   cat > "$SERVICE_SYSTEMD" <<EOF
 [Unit]
 Description=Sing-box Socks5 Service
@@ -154,7 +220,6 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
 ExecStart=$BIN_FILE run -c $CONFIG_FILE
 Restart=always
 RestartSec=3
@@ -172,30 +237,22 @@ EOF
   systemctl restart sing-box-socks5
 
 elif command -v rc-service >/dev/null 2>&1; then
-  echo "[INFO] 使用 OpenRC（Alpine）启动"
-
   cat > "$SERVICE_OPENRC" <<EOF
 #!/sbin/openrc-run
-
 command="$BIN_FILE"
 command_args="run -c $CONFIG_FILE"
 command_background="yes"
 pidfile="/run/sing-box-socks5.pid"
 output_log="$LOG_FILE"
 error_log="$LOG_FILE"
-
-depend() {
-  need net
-}
+depend() { need net; }
 EOF
 
   chmod +x "$SERVICE_OPENRC"
   rc-update add sing-box-socks5 default
   rc-service sing-box-socks5 restart
-
 else
-  echo "❌ 未识别 init 系统，请手动启动："
-  echo "$BIN_FILE run -c $CONFIG_FILE"
+  echo "❌ 未识别 init 系统"
   exit 1
 fi
 
@@ -205,9 +262,3 @@ green "✅ Socks5 服务已启动"
 [[ -n "$IP_V4" ]] && blue "IPv4: socks5://$USERNAME:$PASSWORD@$IP_V4:$PORT"
 [[ -n "$IP_V6" && "$IPV6_AVAILABLE" -eq 1 ]] && \
   yellow "IPv6: socks5://$USERNAME:$PASSWORD@[$IP_V6]:$PORT"
-
-echo
-yellow "管理命令："
-green "  systemctl status sing-box-socks5"
-green "  systemctl restart sing-box-socks5"
-green "  journalctl -u sing-box-socks5 -f"

@@ -1,16 +1,27 @@
 #!/bin/bash
 export LANG=en_US.UTF-8
 
-# ============================================================
-# Sing-box Hysteria2 一键脚本
+# ======================================================================
+# Sing-box hy2 一键脚本
+# 作者：littleDoraemon
+# 说明：
+#   - 支持自动 / 交互模式
+#   - 支持跳跃端口
+#   - 支持环境变量：PORT / UUID / RANGE_PORTS / NODE_NAME
+#  
+#  1、安装方式（2种）
+#     1.1 交互式菜单安装：
+#     curl -fsSL https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/hy2.sh -o hy2.sh && chmod +x hy2.sh && ./hy2.sh
+#    
+#     1.2 非交互式全自动安装:
+#     PORT=31020 RANGE_PORTS=40000-41000 NODE_NAME="小叮当的节点" bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/hy2.sh)
 #
-# ✔ 功能 100% 等价原始 hy2.sh
-# ✔ 状态模型 / 架构 / 菜单行为 对齐 tuic5
-# ✔ 单文件 · 最终发布版
-# ============================================================
+# 
+#  
+# ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="1.0.10"
+VERSION="1.0.1"
 
 
 SINGBOX_VERSION="1.12.13"
