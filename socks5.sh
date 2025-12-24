@@ -15,9 +15,9 @@
 #  curl --socks5-hostname "ipv4:端口号"  -U 用户名:密码 http://ip.sb
 #  curl -6 --socks5-hostname "[ipv6]:端口号" -U 用户名:密码 http://ip.sb
 #
-set -euo pipefail
-
-# ================== 基本变量 ==================
+########################
+# 全局常量
+########################
 INSTALL_DIR="/usr/local/sb"
 CONFIG_FILE="$INSTALL_DIR/config.json"
 BIN_FILE="$INSTALL_DIR/sing-box-socks5"
@@ -29,158 +29,156 @@ SERVICE_OPENRC="/etc/init.d/sing-box-socks5"
 SB_VERSION="1.12.13"
 SB_VER="v${SB_VERSION}"
 
-# ================== 卸载 ==================
-if [[ "${1:-}" == "uninstall" ]]; then
-  echo "[INFO] 卸载 socks5..."
-
-  if command -v systemctl >/dev/null 2>&1; then
-    systemctl stop sing-box-socks5 2>/dev/null || true
-    systemctl disable sing-box-socks5 2>/dev/null || true
-    rm -f "$SERVICE_SYSTEMD"
-    systemctl daemon-reload
-  elif command -v rc-service >/dev/null 2>&1; then
-    rc-service sing-box-socks5 stop 2>/dev/null || true
-    rc-update del sing-box-socks5 default 2>/dev/null || true
-    rm -f "$SERVICE_OPENRC"
-  fi
-
-  rm -rf "$INSTALL_DIR"
-  echo "✅ socks5 已卸载"
-  exit 0
-fi
-
-# ================== 颜色 ==================
+########################
+# 工具函数
+########################
 green(){ echo -e "\e[1;32m$1\033[0m"; }
 yellow(){ echo -e "\e[1;33m$1\033[0m"; }
 blue(){ echo -e "\e[1;34m$1\033[0m"; }
 
-# ================== 随机函数 ==================
-gen_username() {
-  tr -dc 'A-Za-z0-9' </dev/urandom | head -c 10
-}
-
-gen_password() {
-  tr -dc 'A-Za-z0-9!@#%^_-+=' </dev/urandom | head -c 10
-}
-
-gen_port() {
-  shuf -i 1-65530 -n 1
-}
+gen_username() { tr -dc 'A-Za-z0-9' </dev/urandom | head -c 10; }
+gen_password() { tr -dc 'A-Za-z0-9!@#%^_-+=' </dev/urandom | head -c 10; }
+gen_port()     { shuf -i 20000-50000 -n 1; }
 
 check_port_free() {
-  ! ss -lnt | awk '{print $4}' | grep -q ":$1$"
+  ss -lnt 2>/dev/null | awk '{print $4}' | grep -q ":$1$"
+  [[ $? -ne 0 ]]
 }
 
-# ================== TTY / 交互判断 ==================
-IS_TTY=0
-[[ -t 0 ]] && IS_TTY=1
+########################
+# 卸载
+########################
+uninstall() {
+  echo "[INFO] 卸载 socks5..."
 
-if [[ -z "${PORT:-}" || -z "${USERNAME:-}" || -z "${PASSWORD:-}" ]]; then
-  INTERACTIVE=1
-else
-  INTERACTIVE=0
-fi
-
-# 🔧 关键修复：非 TTY 时强制非交互
-if [[ "$INTERACTIVE" == "1" && "$IS_TTY" == "0" ]]; then
-  INTERACTIVE=0
-fi
-
-# ================== 参数处理 ==================
-if [[ "$INTERACTIVE" == "1" ]]; then
-  echo "[INFO] 交互式安装模式（回车自动生成）"
-
-  # ---------- 端口 ----------
-  if [[ -z "${PORT:-}" ]]; then
-    while true; do
-      read -rp "请输入端口号（回车自动生成）: " PORT
-      if [[ -z "$PORT" ]]; then
-        PORT="$(gen_port)"
-        echo "[INFO] 已生成端口: $PORT"
-        break
-      fi
-      if [[ "$PORT" =~ ^[0-9]+$ ]] && check_port_free "$PORT"; then
-        break
-      fi
-      echo "❌ 端口非法或已被占用"
-      PORT=""
-    done
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl stop sing-box-socks5 >/dev/null 2>&1
+    systemctl disable sing-box-socks5 >/dev/null 2>&1
+    rm -f "$SERVICE_SYSTEMD"
+    systemctl daemon-reload
+  elif command -v rc-service >/dev/null 2>&1; then
+    rc-service sing-box-socks5 stop >/dev/null 2>&1
+    rc-update del sing-box-socks5 default >/dev/null 2>&1
+    rm -f "$SERVICE_OPENRC"
   fi
 
-  # ---------- 用户名 ----------
-  if [[ -z "${USERNAME:-}" ]]; then
-    read -rp "请输入用户名（回车自动生成）: " USERNAME
-    [[ -z "$USERNAME" ]] && USERNAME="$(gen_username)"
-    echo "[INFO] 用户名: $USERNAME"
+  rm -rf "$INSTALL_DIR"
+  green "✅ socks5 已卸载"
+  exit 0
+}
+
+########################
+# 参数处理
+########################
+handle_params() {
+  IS_TTY=0
+  [[ -t 0 ]] && IS_TTY=1
+
+  if [[ -z "${PORT:-}" || -z "${USERNAME:-}" || -z "${PASSWORD:-}" ]]; then
+    INTERACTIVE=1
+  else
+    INTERACTIVE=0
   fi
 
-  # ---------- 密码 ----------
-  if [[ -z "${PASSWORD:-}" ]]; then
-    read -rsp "请输入密码（回车自动生成）: " PASSWORD
-    echo
-    [[ -z "$PASSWORD" ]] && PASSWORD="$(gen_password)"
-    echo "[INFO] 密码已生成"
+  # 非 TTY 自动退化
+  [[ "$INTERACTIVE" == "1" && "$IS_TTY" == "0" ]] && INTERACTIVE=0
+
+  if [[ "$INTERACTIVE" == "1" ]]; then
+    echo "[INFO] 交互式安装模式（回车自动生成）"
+
+    if [[ -z "${PORT:-}" ]]; then
+      while true; do
+        read -rp "请输入端口号（回车自动生成）: " PORT
+        if [[ -z "$PORT" ]]; then
+          PORT="$(gen_port)"
+          echo "[INFO] 已生成端口: $PORT"
+          break
+        fi
+        if [[ "$PORT" =~ ^[0-9]+$ ]] && check_port_free "$PORT"; then
+          break
+        fi
+        echo "❌ 端口非法或已被占用"
+        PORT=""
+      done
+    fi
+
+    if [[ -z "${USERNAME:-}" ]]; then
+      read -rp "请输入用户名（回车自动生成）: " USERNAME
+      [[ -z "$USERNAME" ]] && USERNAME="$(gen_username)"
+      echo "[INFO] 用户名: $USERNAME"
+    fi
+
+    if [[ -z "${PASSWORD:-}" ]]; then
+      read -rsp "请输入密码（回车自动生成）: " PASSWORD
+      echo
+      [[ -z "$PASSWORD" ]] && PASSWORD="$(gen_password)"
+      echo "[INFO] 密码已生成"
+    fi
+  else
+    echo "[INFO] 非交互式安装模式（自动生成缺失参数）"
+    PORT="${PORT:-$(gen_port)}"
+    USERNAME="${USERNAME:-$(gen_username)}"
+    PASSWORD="${PASSWORD:-$(gen_password)}"
+  fi
+}
+
+########################
+# 安装依赖
+########################
+install_deps() {
+  if command -v apt >/dev/null 2>&1; then
+    apt update
+    apt install -y curl tar unzip file iproute2 net-tools
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y curl tar unzip file iproute net-tools
+  elif command -v apk >/dev/null 2>&1; then
+    apk add --no-cache curl tar unzip file iproute2
+  fi
+}
+
+########################
+# 下载 sing-box
+########################
+install_singbox() {
+  ARCH_RAW=$(uname -m)
+  case "$ARCH_RAW" in
+    x86_64|amd64) ARCH="amd64" ;;
+    i386|i686) ARCH="386" ;;
+    aarch64|arm64) ARCH="arm64" ;;
+    armv7l|armhf) ARCH="armv7" ;;
+    armv6l) ARCH="armv6" ;;
+    riscv64) ARCH="riscv64" ;;
+    mips64el|mips64le) ARCH="mips64le" ;;
+    mipsel) ARCH="mipsle" ;;
+    mips) ARCH="mips" ;;
+    *) echo "❌ 不支持的架构: $ARCH_RAW"; exit 1 ;;
+  esac
+
+  mkdir -p "$INSTALL_DIR" || exit 1
+  cd "$INSTALL_DIR" || exit 1
+
+  URL="https://github.com/SagerNet/sing-box/releases/download/${SB_VER}/sing-box-${SB_VERSION}-linux-${ARCH}.tar.gz"
+  curl -L --retry 3 -o sb.tar.gz "$URL" || exit 1
+  tar -xzf sb.tar.gz --strip-components=1 || exit 1
+  chmod +x sing-box
+  mv sing-box "$BIN_FILE"
+  rm -f sb.tar.gz
+}
+
+########################
+# 生成配置
+########################
+generate_config() {
+  IPV6_AVAILABLE=0
+  if [[ -f /proc/net/if_inet6 ]] \
+    && ip -6 addr show scope global | grep -q inet6 \
+    && curl -s6 --max-time 3 https://ipv6.ip.sb >/dev/null 2>&1; then
+    IPV6_AVAILABLE=1
   fi
 
-else
-  echo "[INFO] 非交互式安装模式（自动生成缺失参数）"
-  PORT="${PORT:-$(gen_port)}"
-  USERNAME="${USERNAME:-$(gen_username)}"
-  PASSWORD="${PASSWORD:-$(gen_password)}"
-fi
+  LISTEN_ADDR=$([[ "$IPV6_AVAILABLE" -eq 1 ]] && echo "::" || echo "0.0.0.0")
 
-# ================== 安装依赖 ==================
-if command -v apt >/dev/null 2>&1; then
-  apt update
-  apt install -y curl tar unzip file iproute2 net-tools
-elif command -v yum >/dev/null 2>&1; then
-  yum install -y curl tar unzip file iproute net-tools
-elif command -v apk >/dev/null 2>&1; then
-  apk add --no-cache curl tar unzip file iproute2
-fi
-
-# ================== 架构识别 ==================
-ARCH_RAW=$(uname -m)
-case "$ARCH_RAW" in
-  x86_64|amd64) ARCH="amd64" ;;
-  i386|i686) ARCH="386" ;;
-  aarch64|arm64) ARCH="arm64" ;;
-  armv7l|armhf) ARCH="armv7" ;;
-  armv6l) ARCH="armv6" ;;
-  riscv64) ARCH="riscv64" ;;
-  mips64el|mips64le) ARCH="mips64le" ;;
-  mipsel) ARCH="mipsle" ;;
-  mips) ARCH="mips" ;;
-  *) echo "❌ 不支持的架构: $ARCH_RAW"; exit 1 ;;
-esac
-
-# ================== IPv6 自动检测 ==================
-IPV6_AVAILABLE=0
-if [[ -f /proc/net/if_inet6 ]] \
-  && ip -6 addr show scope global | grep -q inet6 \
-  && curl -s6 --max-time 3 https://ipv6.ip.sb >/dev/null 2>&1; then
-  IPV6_AVAILABLE=1
-fi
-
-LISTEN_ADDR=$([[ "$IPV6_AVAILABLE" -eq 1 ]] && echo "::" || echo "0.0.0.0")
-
-IP_V4=$(curl -s4 ipv4.ip.sb || true)
-IP_V6=$(curl -s6 ipv6.ip.sb || true)
-
-# ================== 下载 sing-box ==================
-mkdir -p "$INSTALL_DIR"
-cd "$INSTALL_DIR"
-
-URL="https://github.com/SagerNet/sing-box/releases/download/${SB_VER}/sing-box-${SB_VERSION}-linux-${ARCH}.tar.gz"
-curl -L --retry 3 -o sb.tar.gz "$URL"
-
-tar -xzf sb.tar.gz --strip-components=1
-chmod +x sing-box
-mv sing-box "$BIN_FILE"
-rm -f sb.tar.gz
-
-# ================== 生成配置 ==================
-cat > "$CONFIG_FILE" <<EOF
+  cat > "$CONFIG_FILE" <<EOF
 {
   "log": { "level": "info" },
   "inbounds": [
@@ -199,10 +197,14 @@ cat > "$CONFIG_FILE" <<EOF
   "outbounds": [{ "type": "direct" }]
 }
 EOF
+}
 
-# ================== 启动服务 ==================
-if command -v systemctl >/dev/null 2>&1; then
-  cat > "$SERVICE_SYSTEMD" <<EOF
+########################
+# 启动服务
+########################
+start_service() {
+  if command -v systemctl >/dev/null 2>&1; then
+    cat > "$SERVICE_SYSTEMD" <<EOF
 [Unit]
 Description=Sing-box Socks5 Service
 After=network-online.target
@@ -221,33 +223,34 @@ StandardError=append:$LOG_FILE
 WantedBy=multi-user.target
 EOF
 
-  systemctl daemon-reload
-  systemctl enable sing-box-socks5
-  systemctl restart sing-box-socks5
+    systemctl daemon-reload
+    systemctl enable sing-box-socks5
+    systemctl restart sing-box-socks5
+  else
+    echo "❌ 未识别 init 系统"
+    exit 1
+  fi
+}
 
-elif command -v rc-service >/dev/null 2>&1; then
-  cat > "$SERVICE_OPENRC" <<EOF
-#!/sbin/openrc-run
-command="$BIN_FILE"
-command_args="run -c $CONFIG_FILE"
-command_background="yes"
-pidfile="/run/sing-box-socks5.pid"
-output_log="$LOG_FILE"
-error_log="$LOG_FILE"
-depend() { need net; }
-EOF
+########################
+# main
+########################
+main() {
+  [[ "${1:-}" == "uninstall" ]] && uninstall
 
-  chmod +x "$SERVICE_OPENRC"
-  rc-update add sing-box-socks5 default
-  rc-service sing-box-socks5 restart
-else
-  echo "❌ 未识别 init 系统"
-  exit 1
-fi
+  handle_params
+  install_deps
+  install_singbox
+  generate_config
+  start_service
 
-# ================== 输出 ==================
-echo
-green "✅ Socks5 服务已启动"
-[[ -n "$IP_V4" ]] && blue "IPv4: socks5://$USERNAME:$PASSWORD@$IP_V4:$PORT"
-[[ -n "$IP_V6" && "$IPV6_AVAILABLE" -eq 1 ]] && \
-  yellow "IPv6: socks5://$USERNAME:$PASSWORD@[$IP_V6]:$PORT"
+  IP_V4=$(curl -s4 ipv4.ip.sb 2>/dev/null)
+  IP_V6=$(curl -s6 ipv6.ip.sb 2>/dev/null)
+
+  echo
+  green "✅ Socks5 服务已启动"
+  [[ -n "$IP_V4" ]] && blue "IPv4: socks5://$USERNAME:$PASSWORD@$IP_V4:$PORT"
+  [[ -n "$IP_V6" ]] && yellow "IPv6: socks5://$USERNAME:$PASSWORD@[$IP_V6]:$PORT"
+}
+
+main "$@"
