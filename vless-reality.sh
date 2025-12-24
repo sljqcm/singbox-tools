@@ -114,6 +114,31 @@ load_runtime_from_config() {
 
 
 # =====================================================
+# URL encode / decode
+# =====================================================
+
+urlencode() {
+  local str="$1"
+  local out=""
+  local i c
+
+  for ((i=0; i<${#str}; i++)); do
+    c="${str:i:1}"
+    case "$c" in
+      [a-zA-Z0-9.~_-]) out+="$c" ;;
+      *) printf -v hex '%%%02X' "'$c"; out+="$hex" ;;
+    esac
+  done
+  echo "$out"
+}
+
+urldecode() {
+  local data="${1//+/ }"
+  printf '%b' "${data//%/\\x}"
+}
+
+
+# =====================================================
 # 模式判定
 # =====================================================
 is_interactive(){
@@ -400,7 +425,12 @@ generate_nodes() {
   # -----------------------------
   ip4=$(get_ip4)
   ip6=$(get_ip6)
-  name=$(get_node_name)
+
+  name_raw=$(get_node_name)
+  name=$(urlencode "$name_raw")
+
+
+
   sni=$(get_sni)
 
   [[ -z "$ip4" && -z "$ip6" ]] && {
@@ -480,8 +510,23 @@ check_nodes() {
   ip4=$(get_ip4)
   ip6=$(get_ip6)
 
-  purple "================= 节点信息（VLESS Reality） ================="
+  node_name_raw=get_node_name
+
+  purple "================= 节点信息-VLESS Reality ================="
   green "$(cat "$SUB_FILE")"
+  echo ""
+
+
+  purple "================= 节点信息:（$(get_node_name)） ================="
+
+  while read -r line; do
+    uri="${line%%#*}"
+    name_enc="${line##*#}"
+    name_dec="$(urldecode "$name_enc")"
+
+    green "${uri}#${name_dec}"
+  done < "$SUB_FILE"
+
   echo ""
 
   purple "================= Base64 订阅（全量） ================="
