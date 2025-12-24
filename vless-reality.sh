@@ -25,7 +25,7 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v2.3.20"
+VERSION="v2.3.21"
 SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
@@ -1221,7 +1221,7 @@ main() {
     quick_install
     blue "自动安装完成，以下是节点信息："
     check_nodes
-    exit 0
+    main_loop
   else
     main_loop
   fi
