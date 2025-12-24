@@ -971,16 +971,20 @@ main_loop() {
 main() {
   is_interactive
   if [[ $? -eq 1 ]]; then
-    # 自动模式
-    #非交互模式，优先使用环境变量，未提供则自动生成
+    # 非交互式（自动模式）
     quick_install
 
-    main_loop
+    echo ""
+    yellow "安装完成，按任意键进入菜单..."
+    pause          # ⭐ 关键：这里暂停，但不清屏
+
+    main_loop      # 之后才进入 menu → clear
   else
     # 交互模式
     main_loop
   fi
 }
+
 
 
 main
