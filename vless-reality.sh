@@ -26,7 +26,7 @@ export LANG=en_US.UTF-8
 
 AUTHOR="littleDoraemon"
 VERSION="v2.3.15"
-SINGBOX_VERSION="1.12.14"
+SINGBOX_VERSION="1.12.16"
 
 SERVICE_NAME="sing-box-vless-reality"
 WORK_DIR="/etc/sing-box-vless-reality"
@@ -316,12 +316,22 @@ uninstall_singbox(){
 
 
 # =====================================================
-# Reality key
+# Reality key ----只要 pbk / sid 无效，就强制重新生成 Reality key
 # =====================================================
 
 gen_reality(){
+  # 如果 sing-box 不存在，直接报错
+  if [[ ! -x "$WORK_DIR/sing-box" ]]; then
+    red "sing-box 不存在或不可执行，无法生成 Reality 密钥"
+    exit 1
+  fi
+
+  # 如果已有有效 key，直接返回（避免重复生成）
+  if [[ -s "$REALITY_PUBKEY_FILE" && -s "$REALITY_SID_FILE" ]]; then
+    return
+  fi
+
   if [[ -n "$REALITY_PBK" && -n "$REALITY_SID" ]]; then
-    # 仅为 private_key 生成
     local k
     k=$("$WORK_DIR/sing-box" generate reality-keypair)
     PRIVATE_KEY=$(awk '/PrivateKey/ {print $2}' <<<"$k")
@@ -331,9 +341,16 @@ gen_reality(){
   else
     local k
     k=$("$WORK_DIR/sing-box" generate reality-keypair)
-    PRIVATE_KEY=$(awk '/PrivateKey/ {print $2}' <<<"$k")
+
     PUBLIC_KEY=$(awk '/PublicKey/ {print $2}' <<<"$k")
+    PRIVATE_KEY=$(awk '/PrivateKey/ {print $2}' <<<"$k")
     SHORT_ID=$(openssl rand -hex 8)
+  fi
+
+  # 最终兜底校验
+  if [[ -z "$PUBLIC_KEY" || -z "$SHORT_ID" ]]; then
+    red "Reality 密钥生成失败（pbk 或 sid 为空）"
+    exit 1
   fi
 
   echo "$PUBLIC_KEY" > "$REALITY_PUBKEY_FILE"
