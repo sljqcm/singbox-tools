@@ -6,7 +6,6 @@ export LANG=en_US.UTF-8
 # 作者：littleDoraemon
 # 说明：
 #   - 支持自动 / 交互模式
-#   - 支持跳跃端口：使用nat端口转发给主端口，也就是服务端一下子给你把跳跃端口范围的端口都指向了主端口号的转发(跟hy2的服务器天然支持跳跃端口功能不太一样)
 #   - #   - 支持环境变量： PORT / UUID / NODE_NAME / SNI/ REALITY_PBK / REALITY_SID
 # 
 #  
@@ -25,7 +24,7 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v1.0.2"
+VERSION="v1.0.1"
 SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
@@ -623,7 +622,7 @@ check_nodes() {
     local clash_v4="${base_v4}?client=clash"
     local singbox_v4="${base_v4}?client=singbox"
 
-    green "【IPv4 · 基础订阅】"
+    green "【IPv4 · 基础订阅-V2rayN,Shadowrocket,Nekobox,Loon,Karing,Sterisand订阅链接】"
     green "$base_v4"
     generate_qr "$base_v4"
     echo ""
@@ -647,7 +646,7 @@ check_nodes() {
     local clash_v6="${base_v6}?client=clash"
     local singbox_v6="${base_v6}?client=singbox"
 
-    green "【IPv6 · 基础订阅】"
+    green "【IPv6 · 基础订阅-V2rayN,Shadowrocket,Nekobox,Loon,Karing,Sterisand订阅链接】"
     green "$base_v6"
     generate_qr "$base_v6"
     echo ""
