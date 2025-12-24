@@ -10,7 +10,7 @@ export LANG=en_US.UTF-8
 # ============================================================
 
 AUTHOR="littleDoraemon"
-VERSION="1.0.7"
+VERSION="1.0.8"
 
 
 SINGBOX_VERSION="1.12.13"
@@ -25,6 +25,10 @@ sub_port_file="$work_dir/sub.port"
 range_port_file="$work_dir/range_ports"
 
 node_name_file="$work_dir/node_name"
+
+
+sub_nginx_conf="$work_dir/singbox_hy2_sub.conf"
+nginx_conf_link="/etc/nginx/conf.d/singbox_hy2_sub.conf"
 
 
 # NAT comment
@@ -1358,14 +1362,13 @@ get_nginx_status_colored() {
 }
 
 get_subscribe_status_colored() {
-    local conf="/etc/nginx/conf.d/singbox_hy2_sub.conf"
-
-    if [[ -f "$conf" ]]; then
+    if [[ -f "$sub_nginx_conf" ]]; then
         green "已启用"
     else
         yellow "未启用"
     fi
 }
+
 
 
 print_subscribe_status() {
@@ -1413,9 +1416,15 @@ EOF
     # 建立软链
     ln -sf "$sub_nginx_conf" "$nginx_conf_link"
 
-    systemctl reload nginx
+   if systemctl is-active nginx >/dev/null 2>&1; then
+        systemctl reload nginx
+        green "订阅服务已生成并生效"
+    else
+        yellow "Nginx 未运行，订阅配置已生成，启动 Nginx 后生效"
+    fi
 
-    green "订阅服务已生成并生效"
+
+    
 }
 
 
@@ -1424,7 +1433,9 @@ disable_subscribe() {
     rm -f "$sub_nginx_conf"
     rm -f "$nginx_conf_link"
 
-    systemctl reload nginx
+    if systemctl is-active nginx >/dev/null 2>&1; then
+        systemctl reload nginx
+    fi
 
     green "订阅服务已关闭"
 }
@@ -1447,9 +1458,11 @@ change_subscribe_port() {
     # 如果订阅已启用，重建 conf
     if [[ -f "$sub_nginx_conf" ]]; then
         build_subscribe_conf
+        green "订阅端口已修改为：$new_port"
+    else
+        yellow "订阅未启用，端口已保存，启用订阅后生效"
     fi
-
-    green "订阅端口已修改为：$new_port"
+    
 }
 
 
