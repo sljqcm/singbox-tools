@@ -57,6 +57,7 @@ yellow(){ echo -e "\e[1;33m$1\033[0m"; }
 blue(){ echo -e "\e[1;34m$1\033[0m"; }
 purple(){ echo -e "\e[1;35m$1\033[0m"; }
 red_input(){ printf "\e[1;91m%s\033[0m" "$1"; }
+brown(){ echo -e "\033[38;5;94m$1\033[0m"; }
 
 pause(){ read -n 1 -s -r -p "按任意键继续..." </dev/tty; }
 
@@ -520,11 +521,11 @@ check_nodes() {
     name_enc="${line##*#}"
     name_dec="$(urldecode "$name_enc")"
 
-    yellow "【订阅用（URI，已 urlencode）,复制到客户端用这串】"
+    yellow "【订阅用（URI，已 urlencode）,复制到客户端请用这串】"
     green  "${uri}#${name_enc}"
     echo ""
 
-    brown "【人类可读（仅展示，已 decode）】"
+    brown "【人类可读（仅展示用）"
     green  "${uri}#${name_dec}"
     echo ""
   done < "$SUB_FILE"
@@ -1027,6 +1028,7 @@ main() {
   is_interactive
   if [[ $? -eq 1 ]]; then
     quick_install
+    blue "自动安装完成，以下是节点信息："
     check_nodes
     exit 0
   else
