@@ -36,8 +36,14 @@ green(){ echo -e "\e[1;32m$1\033[0m"; }
 yellow(){ echo -e "\e[1;33m$1\033[0m"; }
 blue(){ echo -e "\e[1;34m$1\033[0m"; }
 
-gen_username() { tr -dc 'A-Za-z0-9' </dev/urandom | head -c 10; }
-gen_password() { tr -dc 'A-Za-z0-9!@#%^_-+=' </dev/urandom | head -c 10; }
+gen_password() {
+  tr -dc 'A-Za-z0-9' </dev/urandom | head -c 10
+}
+
+gen_password() {
+  tr -dc 'A-Za-z0-9!@#%^_+' </dev/urandom | head -c 10
+}
+
 gen_port()     { shuf -i 20000-50000 -n 1; }
 
 check_port_free() {
