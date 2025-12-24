@@ -25,7 +25,7 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v2.3.25"
+VERSION="v1.0.1"
 SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
