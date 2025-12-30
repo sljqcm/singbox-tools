@@ -24,7 +24,7 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v1.0.1"
+VERSION="v1.0.2"
 SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
@@ -156,18 +156,71 @@ init_dirs(){
   mkdir -p "$WORK_DIR"
 }
 
+
+
+
 init_node_name(){
-  # 非交互式 / 显式传入 NODE_NAME → 永远覆盖
-  if [[ -n "$NODE_NAME" ]]; then
-    echo "$NODE_NAME" > "$NODE_NAME_FILE"
-    return
-  fi
+    local DEFAULT_NODE_NAME="${AUTHOR}-vless-reality"
+    
+    # ======================================================
+    # 1. 持久化节点名称优先（如果用户曾设置过）
+    # ======================================================
+    if [[ -f "$NODE_NAME_FILE" ]]; then
+        saved_name=$(cat "$NODE_NAME_FILE")
+        if [[ -n "$saved_name" ]]; then
+            echo "$saved_name" > "$NODE_NAME_FILE"
+            return
+        fi
+    fi
 
-  # 未传 NODE_NAME → 只有在文件不存在时才初始化
-  [[ -f "$NODE_NAME_FILE" ]] && return
+    # ======================================================
+    # 2. 当前会话设置的节点名称（NODE_NAME 环境变量）
+    # ======================================================
+    if [[ -n "$NODE_NAME" ]]; then
+        echo "$NODE_NAME" > "$NODE_NAME_FILE"
+        return
+    fi
 
-    # 默认节点名：AUTHOR-vless-Reality
-  echo "${AUTHOR}-vless-Reality" > "$NODE_NAME_FILE"
+    # ======================================================
+    # 3. 自动生成节点名称（基于IP的国家代码和运营商）
+    # ======================================================
+    local country=""
+    local org=""
+
+    # Try getting country code from ipapi
+    country=$(curl -fs --max-time 2 https://ipapi.co/country 2>/dev/null | tr -d '\r\n')
+    org=$(curl -fs --max-time 2 https://ipapi.co/org 2>/dev/null | sed 's/[ ]\+/_/g')
+
+    # Fallback to ip.sb
+    if [[ -z "$country" ]]; then
+        country=$(curl -fs --max-time 2 ip.sb/country 2>/dev/null | tr -d '\r\n')
+    fi
+
+    if [[ -z "$org" ]]; then
+        org=$(curl -fs --max-time 2 ipinfo.io/org 2>/dev/null \
+            | awk '{$1=""; print $0}' \
+            | sed -e 's/^[ ]*//' -e 's/[ ]\+/_/g')
+    fi
+
+    # Generate node name based on country and org
+    if [[ -n "$country" && -n "$org" ]]; then
+        node_name="${country}-${org}"
+        echo "$node_name" > "$NODE_NAME_FILE"
+        return
+    fi
+
+    if [[ -n "$country" && -z "$org" ]]; then
+        echo "$country" > "$NODE_NAME_FILE"
+        return
+    fi
+
+    if [[ -z "$country" && -n "$org" ]]; then
+        echo "$DEFAULT_NODE_NAME" > "$NODE_NAME_FILE"
+        return
+    fi
+
+    # Default node name if all else fails
+    echo "$DEFAULT_NODE_NAME" > "$NODE_NAME_FILE"
 }
 
 
