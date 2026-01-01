@@ -21,7 +21,7 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="1.0.3(2025-12-31)"
+VERSION="1.0.4(2025-12-31)"
 
 
 SINGBOX_VERSION="1.12.13"
@@ -391,6 +391,43 @@ allow_port() {
 
     green "已放行 UDP 端口：$port"
 }
+
+
+# ============================================================
+# 防火墙放行 Nginx 订阅端口（TCP）
+# ============================================================
+allow_tcp_port() {
+    local port="$1"
+
+    iptables -C INPUT -p tcp --dport "$port" -j ACCEPT &>/dev/null ||
+        iptables -I INPUT -p tcp --dport "$port" -j ACCEPT
+
+    ip6tables -C INPUT -p tcp --dport "$port" -j ACCEPT &>/dev/null ||
+        ip6tables -I INPUT -p tcp --dport "$port" -j ACCEPT
+
+    green "已放行 TCP 端口：$port"
+}
+
+
+# ============================================================
+# 防火墙回收 TCP 端口（Nginx 订阅端口）
+# ============================================================
+remove_tcp_port() {
+    local port="$1"
+
+    # IPv4
+    while iptables -C INPUT -p tcp --dport "$port" -j ACCEPT &>/dev/null; do
+        iptables -D INPUT -p tcp --dport "$port" -j ACCEPT
+    done
+
+    # IPv6
+    while ip6tables -C INPUT -p tcp --dport "$port" -j ACCEPT &>/dev/null; do
+        ip6tables -D INPUT -p tcp --dport "$port" -j ACCEPT
+    done
+
+    green "已回收 TCP 端口：$port"
+}
+
 
 # ============================================================
 # 跳跃端口 NAT 管理（核心修复）
@@ -840,6 +877,8 @@ check_nodes() {
     yellow "========================================================"
 
     [[ "$mode" != "silent" ]] && pause_return
+
+    return 0
 }
 
 
@@ -1334,6 +1373,12 @@ uninstall_singbox() {
     u=${u:-y}
     [[ ! "$u" =~ ^[Yy]$ ]] && { yellow "已取消卸载"; pause_return; return; }
 
+    if [[ -f "$sub_port_file" ]]; then
+        old_port=$(cat "$sub_port_file")
+        remove_tcp_port "$old_port"
+    fi
+
+
     # ---------- 清理跳跃端口 ----------
     remove_jump_rule
     if [[ -f "$range_port_file" ]]; then
@@ -1611,6 +1656,9 @@ build_subscribe_conf() {
     echo "$sub_port" > "$sub_port_file"
 
 
+    # 放行 Nginx TCP 端口
+    allow_tcp_port "$sub_port"
+
     # ==================================================
     # 3. 构建 Base64 订阅内容（单一事实源）
     # ==================================================
@@ -1657,6 +1705,13 @@ disable_subscribe() {
     rm -f "$sub_nginx_conf"
     rm -f "$nginx_conf_link"
 
+    if [[ -f "$sub_port_file" ]]; then
+        old_port=$(cat "$sub_port_file")
+        remove_tcp_port "$old_port"
+        rm -f "$sub_port_file"
+    fi
+
+
     if command_exists nginx && service_active nginx; then
         service_restart nginx
     fi
@@ -1669,7 +1724,14 @@ change_subscribe_port() {
     prompt_valid_port "new_port" "请输入新的订阅端口："
 
 
+    old_port=$(cat "$sub_port_file" 2>/dev/null)
+    [[ -n "$old_port" ]] && remove_tcp_port "$old_port"
+
+
     echo "$new_port" > "$sub_port_file"
+
+    allow_tcp_port "$new_port"
+
 
     # 如果订阅已启用，重建 conf
     if [[ -f "$sub_nginx_conf" ]]; then
@@ -1703,10 +1765,6 @@ main_entry() {
         # ==================================================
         # 非交互式 / 自动模式
         # ==================================================
-        if [[ -z "$NGINX_PORT" ]]; then
-            err "自动模式下必须提供 NGINX_PORT，否则无法创建订阅服务"
-            exit 1
-        fi
 
         yellow "检测到自动模式（ENV 已传入），开始自动部署..."
 
