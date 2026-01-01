@@ -26,7 +26,7 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v1.0.11(2026-01-01)"
+VERSION="v1.0.12(2026-01-01)"
 SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
@@ -301,7 +301,7 @@ prompt_nginx_port() {
 
   while true; do
     if [[ -z "$p" ]]; then
-      read -rp "$(red_input "请输入订阅端口（NGINX_PORT / TCP，推荐 10000-65535）：")" p
+      read -rp "$(red_input "请输入订阅端口（TCP，推荐 10000-65535）：")" p
     fi
 
     if ! is_port "$p"; then
@@ -320,6 +320,7 @@ prompt_nginx_port() {
   done
 
   NGINX_PORT="$p"
+  mkdir -p "$WORK_DIR"
   echo "$NGINX_PORT" > "$SUB_PORT_FILE"
 }
 
@@ -329,7 +330,7 @@ prompt_vless_port() {
 
   while true; do
     if [[ -z "$p" ]]; then
-      read -rp "$(red_input "请输入 VLESS 监听端口（PORT / TCP，推荐 10000-65535）：")" p
+      read -rp "$(red_input "请输入 VLESS端口（TCP，推荐 10000-65535）：")" p
     fi
 
     if ! is_port "$p"; then
