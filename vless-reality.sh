@@ -14,6 +14,8 @@ export LANG=en_US.UTF-8
 #     curl -fsSL https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/vless-reality.sh -o vless-reality.sh && chmod +x vless-reality.sh && ./vless-reality.sh
 #    
 #     1.2 非交互式全自动安装(支持环境变量： PORT(必填)  /NGINX_PORT(必填) / UUID / NODE_NAME / SNI/ REALITY_PBK / REALITY_SID):
+#     未提供 PORT / NGINX_PORT 时，脚本将暂停并提示输入（不会直接失败）
+
 #     PORT=31090 SNI=www.visa.com NODE_NAME="小叮当的节点" bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/vless-reality.sh)
 #
 # Optional env(可选环境变量):
@@ -24,7 +26,7 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v1.0.7(2026-01-01)"
+VERSION="v1.0.8(2026-01-01)"
 SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
@@ -299,7 +301,7 @@ prompt_nginx_port() {
 
   while true; do
     if [[ -z "$p" ]]; then
-      read -rp "$(red_input "请输入订阅端口（NGINX_PORT / TCP）：")" p
+      read -rp "$(red_input "请输入订阅端口（NGINX_PORT / TCP，推荐 10000-65535）：")" p
     fi
 
     if ! is_port "$p"; then
@@ -309,7 +311,7 @@ prompt_nginx_port() {
     fi
 
     if is_used "$p"; then
-      red "端口 $p 已被占用"
+      red "端口 $p 已被占用，请换一个未使用的端口（如 10000-65535）"
       p=""
       continue
     fi
@@ -327,7 +329,7 @@ prompt_vless_port() {
 
   while true; do
     if [[ -z "$p" ]]; then
-      read -rp "$(red_input "请输入 VLESS 监听端口（PORT / TCP）：")" p
+      read -rp "$(red_input "请输入 VLESS 监听端口（PORT / TCP，推荐 10000-65535）：")" p
     fi
 
     if ! is_port "$p"; then
@@ -337,7 +339,7 @@ prompt_vless_port() {
     fi
 
     if is_used "$p"; then
-      red "端口 $p 已被占用"
+      red "端口 $p 已被占用，请换一个未使用的端口（如 10000-65535）"
       p=""
       continue
     fi
@@ -779,7 +781,7 @@ ensure_nginx_conf_dir() {
 
 init_subscribe_port() {
   if [[ -z "$NGINX_PORT" ]]; then
-    red "NGINX_PORT 为必填参数（订阅端口），请通过环境变量指定"
+    red "NGINX_PORT 为必填参数，请重新运行脚本并输入端口"
     exit 1
   fi
 
@@ -926,8 +928,25 @@ generate_nodes() {
 # 核心：check_nodes（唯一事实源）
 # =====================================================
 
+print_subscribe_guide() {
+    purple "================= 使用说明（如何添加订阅） ================="
+    echo ""
+    green  " · v2rayN / Nekobox / 小火箭：使用【基础订阅链接】"
+    green  " · Clash 用户：使用【Clash 订阅】"
+    green  " · Sing-box 用户：使用【Sing-box 订阅】"
+    echo ""
+    yellow "提示："
+    yellow " - 基础订阅适用于大多数 VLESS 客户端"
+    yellow " - 不确定用哪个时，优先尝试【基础订阅链接】"
+    echo ""
+}
+
+
 check_nodes() {
   local mode="$1"   # silent / empty
+  yellow "下面是节点与订阅信息，请根据你使用的客户端选择对应订阅链接："
+  echo ""
+
 
   # =====================================================
   # 1️⃣ config.json = 唯一事实源
@@ -940,6 +959,10 @@ check_nodes() {
   # =====================================================
   # 2️⃣ 生成节点与订阅源（永远执行）
   # =====================================================
+
+
+
+
   generate_nodes || {
     [[ "$mode" != "silent" ]] && pause
     return
@@ -981,6 +1004,7 @@ check_nodes() {
   green "$(cat "$SUB_B64")"
   echo ""
 
+  print_subscribe_guide
   # ================= IPv4 =================
   if [[ -n "$ip4" ]]; then
     purple "================= IPv4 订阅 ================="
