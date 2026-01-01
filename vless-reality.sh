@@ -6,14 +6,14 @@ export LANG=en_US.UTF-8
 # 作者：littleDoraemon
 # 说明：
 #   - 支持自动 / 交互模式
-#   - #   - 支持环境变量： PORT / UUID / NODE_NAME / SNI/ REALITY_PBK / REALITY_SID
+#   - #   - 支持环境变量： PORT (必填) /NGINX_PORT (必填) / UUID / NODE_NAME / SNI/ REALITY_PBK / REALITY_SID
 # 
 #  
 #  1、安装方式（2种）
 #     1.1 交互式菜单安装：
 #     curl -fsSL https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/vless-reality.sh -o vless-reality.sh && chmod +x vless-reality.sh && ./vless-reality.sh
 #    
-#     1.2 非交互式全自动安装(支持环境变量： PORT / UUID / NODE_NAME / SNI/ REALITY_PBK / REALITY_SID):
+#     1.2 非交互式全自动安装(支持环境变量： PORT(必填)  /NGINX_PORT(必填) / UUID / NODE_NAME / SNI/ REALITY_PBK / REALITY_SID):
 #     PORT=31090 SNI=www.visa.com NODE_NAME="小叮当的节点" bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/vless-reality.sh)
 #
 # Optional env(可选环境变量):
@@ -24,7 +24,7 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v1.0.5"
+VERSION="v1.0.7(2026-01-01)"
 SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
@@ -39,6 +39,7 @@ SUB_B64="$WORK_DIR/sub_base64.txt"
 SUB_PORT_FILE="$WORK_DIR/sub.port"
 
 
+NGINX_SERVICE="nginx"
 
 NGX_CONF="$WORK_DIR/vless_reality_sub.conf"
 
@@ -81,16 +82,23 @@ gradient() {
 command_exists(){ command -v "$1" >/dev/null 2>&1; }
 is_port(){ [[ "$1" =~ ^[0-9]+$ && "$1" -ge 1 && "$1" -le 65535 ]]; }
 
+
 is_used() {
   local port="$1"
 
   if command -v ss >/dev/null 2>&1; then
-    # ss：兼容 IPv4 / IPv6 / [::]:PORT / 0.0.0.0:PORT
-    ss -tuln | grep -qE "[:.]${port}\b"
+    # 精确匹配 LISTEN 状态 + 端口
+    ss -H -lnt \
+      | awk '{print $4}' \
+      | grep -Eq "(:|\\])${port}$"
+
   elif command -v netstat >/dev/null 2>&1; then
-    netstat -tuln | grep -qE "[:.]${port}\b"
+    netstat -lnt 2>/dev/null \
+      | awk '{print $4}' \
+      | grep -Eq "(:|\\])${port}$"
+
   else
-    # 理论兜底：无 ss / netstat 时认为未占用
+    # 无法判断时，保守认为未占用
     return 1
   fi
 }
@@ -100,6 +108,15 @@ is_used() {
 is_uuid(){ [[ "$1" =~ ^[a-fA-F0-9-]{36}$ ]]; }
 
 
+
+
+# ======================= 统一退出 =======================
+exit_script() {
+    echo ""
+    green "感谢使用本脚本,再见👋"
+    echo ""
+    exit 0
+}
 
 
 detect_nginx_conf_dir() {
@@ -132,8 +149,27 @@ detect_init() {
 }
 
 
+detect_nginx_service() {
+  if [[ "$INIT_SYSTEM" == "systemd" ]]; then
+    # systemd 基本统一叫 nginx
+    NGINX_SERVICE="nginx"
+  else
+    # OpenRC：尝试自动发现
+    for svc in nginx nginx-openrc nginx-mainline; do
+      if [[ -f "/etc/init.d/${svc}" ]]; then
+        NGINX_SERVICE="$svc"
+        return
+      fi
+    done
+    # 兜底
+    NGINX_SERVICE="nginx"
+  fi
+}
+
+
 init_platform() {
   init_nginx_paths
+  detect_nginx_service
 }
 
 
@@ -247,7 +283,7 @@ urldecode() {
 # 模式判定
 # =====================================================
 is_interactive(){
-  [[ -n "$PORT" || -n "$UUID" || -n "$NODE_NAME" || -n "$SNI" ]] && return 1 || return 0
+  [[ -n "$PORT" || -n "$NGINX_PORT" || -n "$UUID" || -n "$NODE_NAME" || -n "$SNI" ]] && return 1 || return 0
 }
 
 # =====================================================
@@ -255,6 +291,61 @@ is_interactive(){
 # =====================================================
 init_dirs(){
   mkdir -p "$WORK_DIR"
+}
+
+
+prompt_nginx_port() {
+  local p="$NGINX_PORT"
+
+  while true; do
+    if [[ -z "$p" ]]; then
+      read -rp "$(red_input "请输入订阅端口（NGINX_PORT / TCP）：")" p
+    fi
+
+    if ! is_port "$p"; then
+      red "端口无效（1-65535）"
+      p=""
+      continue
+    fi
+
+    if is_used "$p"; then
+      red "端口 $p 已被占用"
+      p=""
+      continue
+    fi
+
+    break
+  done
+
+  NGINX_PORT="$p"
+  echo "$NGINX_PORT" > "$SUB_PORT_FILE"
+}
+
+
+prompt_vless_port() {
+  local p="$PORT"
+
+  while true; do
+    if [[ -z "$p" ]]; then
+      read -rp "$(red_input "请输入 VLESS 监听端口（PORT / TCP）：")" p
+    fi
+
+    if ! is_port "$p"; then
+      red "端口无效（1-65535）"
+      p=""
+      continue
+    fi
+
+    if is_used "$p"; then
+      red "端口 $p 已被占用"
+      p=""
+      continue
+    fi
+
+    break
+  done
+
+  PORT="$p"
 }
 
 
@@ -495,8 +586,8 @@ uninstall_singbox() {
   # ==================================================
   # 4. 重载 nginx（如果存在且在运行）
   # ==================================================
-  if command_exists nginx && service_active nginx; then
-    service_restart nginx
+  if command_exists nginx && service_active "$NGINX_SERVICE"; then
+    service_restart "$NGINX_SERVICE"
   fi
 
   green "Sing-box（VLESS Reality）已卸载完成"
@@ -686,30 +777,88 @@ ensure_nginx_conf_dir() {
 }
 
 
+init_subscribe_port() {
+  if [[ -z "$NGINX_PORT" ]]; then
+    red "NGINX_PORT 为必填参数（订阅端口），请通过环境变量指定"
+    exit 1
+  fi
 
-build_subscribe_conf(){
+  # 统一走校验逻辑，但不再 prompt
+  local p="$NGINX_PORT"
+
+  if ! is_port "$p"; then
+    red "NGINX_PORT 无效：$p"
+    exit 1
+  fi
+
+  if is_used "$p"; then
+    red "NGINX_PORT 已被占用：$p"
+    exit 1
+  fi
+
+  echo "$p" > "$SUB_PORT_FILE"
+}
+
+
+
+build_subscribe_conf() {
   ensure_nginx_conf_dir
 
-  [[ -f "$SUB_PORT_FILE" ]] || echo $((PORT+1)) > "$SUB_PORT_FILE"
+  # =====================================================
+  # 1. 订阅端口必须已存在（唯一事实源）
+  # =====================================================
+  if [[ ! -f "$SUB_PORT_FILE" ]]; then
+    red "未找到订阅端口配置（SUB_PORT_FILE）"
+    red "请先通过 NGINX_PORT 初始化订阅端口"
+    return 1
+  fi
 
+  local sub_port
+  sub_port=$(cat "$SUB_PORT_FILE")
+
+  if ! is_port "$sub_port"; then
+    red "订阅端口无效：$sub_port"
+    return 1
+  fi
+
+  # =====================================================
+  # 2. 生成 nginx 订阅配置
+  # =====================================================
   cat > "$NGX_CONF" <<EOF
 server {
-  listen $(cat "$SUB_PORT_FILE");
-  listen [::]:$(cat "$SUB_PORT_FILE");
-  location /$UUID {
-    alias $SUB_FILE;
+  listen ${sub_port};
+  listen [::]:${sub_port};
+
+
+
+  location /${UUID} {
+    alias ${SUB_FILE};
     default_type text/plain;
   }
 }
 EOF
 
+  # =====================================================
+  # 3. 建立 systemd / openrc 通用软链接
+  # =====================================================
   ln -sf "$NGX_CONF" "$NGX_LINK"
 
-  if service_active nginx; then
-    service_restart nginx
+  # =====================================================
+  # 4. 防火墙：确保订阅端口已放行（TCP）
+  # =====================================================
+  allow_tcp_port "$sub_port"
+
+  # =====================================================
+  # 5. 重载 nginx（存在且运行中才操作）
+  # =====================================================
+  if command_exists nginx && service_active "$NGINX_SERVICE"; then
+    service_restart "$NGINX_SERVICE"
   fi
 
+  green "订阅服务已就绪（Nginx 端口：${sub_port}）"
 }
+
+
 
 
 
@@ -745,10 +894,8 @@ generate_nodes() {
   pbk=$(cat "$REALITY_PUBKEY_FILE")
   sid=$(cat "$REALITY_SID_FILE")
 
-  # -----------------------------
-  # 确保订阅端口存在
-  # -----------------------------
-  [[ -f "$SUB_PORT_FILE" ]] || echo $((PORT + 1)) > "$SUB_PORT_FILE"
+
+
 
   # -----------------------------
   # 生成订阅内容（单行 URI）
@@ -929,7 +1076,7 @@ change_config() {
       3) change_node_name ;;
       4) change_sni ;;
       0) return ;;
-      88) exit 0 ;;
+      88) exit_script ;;
       *) red "无效输入"; pause ;;
     esac
   done
@@ -1094,6 +1241,42 @@ change_sni(){
 
 
 # =====================================================
+# 防火墙：TCP 端口放行 / 回收（订阅 & VLESS）
+# =====================================================
+
+allow_tcp_port() {
+  local port="$1"
+
+  # IPv4
+  iptables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null || \
+    iptables -I INPUT -p tcp --dport "$port" -j ACCEPT
+
+  # IPv6
+  ip6tables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null || \
+    ip6tables -I INPUT -p tcp --dport "$port" -j ACCEPT
+
+  green "已放行 TCP 端口：$port"
+}
+
+remove_tcp_port() {
+  local port="$1"
+
+  # IPv4
+  while iptables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null; do
+    iptables -D INPUT -p tcp --dport "$port" -j ACCEPT
+  done
+
+  # IPv6
+  while ip6tables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null; do
+    ip6tables -D INPUT -p tcp --dport "$port" -j ACCEPT
+  done
+
+  green "已回收 TCP 端口：$port"
+}
+
+
+
+# =====================================================
 # 安装流程
 # =====================================================
 
@@ -1113,43 +1296,34 @@ install_common(){
 
 
 quick_install(){
-  # 参数兜底（自动模式）
-  PORT=${PORT:-$(shuf -i 1-65535 -n1)}
+
+
+ # ===== 必填参数，未提供则阻塞 =====
+  prompt_vless_port
+  prompt_nginx_port
+
+  # UUID 仍然允许自动生成（这是合理的）
   UUID=${UUID:-$(cat /proc/sys/kernel/random/uuid)}
 
+
   install_common
+  init_subscribe_port
   refresh_all
 
    # ===== 强制启用订阅 =====
-  service_start nginx
-  service_enable nginx
+  service_start "$NGINX_SERVICE"
 
-  build_subscribe_conf
+  service_enable "$NGINX_SERVICE"
+
+  
 }
 
 
 interactive_install(){
   # -------- 端口 --------
-  while true; do
-    read -rp "$(red_input "请输入vless端口（留空回车则自动生成）：")" PORT
+  prompt_vless_port
+  prompt_nginx_port
 
-    # 回车 → 自动生成端口
-    if [[ -z "$PORT" ]]; then
-      while true; do
-        PORT=$(shuf -i 10000-65535 -n1)
-        ! is_used "$PORT" && break
-      done
-      green "已自动选择端口：$PORT"
-      break
-    fi
-
-    # 手动输入 → 校验
-    if is_port "$PORT" && ! is_used "$PORT"; then
-      break
-    else
-      red "端口无效或已被占用，请重新输入"
-    fi
-  done
 
   # -------- UUID --------
   while true; do
@@ -1168,12 +1342,15 @@ interactive_install(){
     fi
   done
 
+ 
+
   install_common
+  init_subscribe_port
   refresh_all
   
   # 启动服务（交互安装期望的行为）
   service_start ${SERVICE_NAME}
-  service_start nginx
+  service_start "$NGINX_SERVICE"
 
 }
 
@@ -1189,6 +1366,8 @@ is_subscribe_enabled() {
   [[ -f "$NGX_CONF" ]]
 }
 
+
+
 change_subscribe_port() {
   read -rp "$(red_input "请输入新的订阅端口：")" new_port
 
@@ -1202,24 +1381,39 @@ change_subscribe_port() {
     return
   fi
 
+  local old_port=""
+  [[ -f "$SUB_PORT_FILE" ]] && old_port=$(cat "$SUB_PORT_FILE")
+
+  # 写入新端口
   echo "$new_port" > "$SUB_PORT_FILE"
+
+  # 防火墙处理
+  allow_tcp_port "$new_port"
+
+  if [[ -n "$old_port" && "$old_port" != "$new_port" ]]; then
+    remove_tcp_port "$old_port"
+  fi
 
   if is_subscribe_enabled; then
     build_subscribe_conf
-    green "订阅端口已修改为：$new_port"
+    green "订阅端口已修改：${old_port:-无} → $new_port"
   else
-    yellow "订阅未启用，端口已保存，启用订阅后生效"
+    yellow "订阅未启用，端口已保存，启用后生效"
   fi
 }
+
+
 
 
 disable_subscribe() {
   rm -f "$NGX_CONF"
   rm -f "$NGX_LINK"
 
-  if service_active nginx; then
-    service_restart nginx
+  if service_active "$NGINX_SERVICE"; then
+    service_restart "$NGINX_SERVICE"
   fi
+
+[[ -f "$SUB_PORT_FILE" ]] && remove_tcp_port "$(cat "$SUB_PORT_FILE")"
 
 
   green "订阅服务已关闭"
@@ -1252,8 +1446,8 @@ manage_subscribe_menu() {
     read -rp "$(red_input "请选择：")" sel
     case "$sel" in
       1)
-        service_start nginx
-        if service_active nginx; then
+        service_start "$NGINX_SERVICE"
+        if service_active "$NGINX_SERVICE"; then
           green "Nginx 已启动"
         else
           red "Nginx 启动失败"
@@ -1261,8 +1455,8 @@ manage_subscribe_menu() {
         pause
         ;;
       2)
-        service_stop nginx
-        if service_active nginx; then
+        service_stop "$NGINX_SERVICE"
+        if service_active "$NGINX_SERVICE"; then
           red "Nginx 停止失败"
         else
           green "Nginx 已停止"
@@ -1270,8 +1464,8 @@ manage_subscribe_menu() {
         pause
         ;;
       3)
-        service_restart nginx
-        if service_active nginx; then
+        service_restart "$NGINX_SERVICE"
+        if service_active "$NGINX_SERVICE"; then
           green "Nginx 已重启"
         else
           red "Nginx 重启失败"
@@ -1295,7 +1489,7 @@ manage_subscribe_menu() {
         return
         ;;
       88)
-        exit 0
+        exit_script
         ;;
       *)
         red "无效输入"
@@ -1348,7 +1542,7 @@ menu(){
       4) check_nodes ;;
       5) change_config ;;
       6) manage_subscribe_menu ;;
-      88) exit 0 ;;
+      88) exit_script ;;
       *) red "无效选项，请重新输入" ;;
     esac
 }
@@ -1388,13 +1582,13 @@ get_nginx_status_colored() {
   fi
 
   if [[ "$INIT_SYSTEM" == "systemd" ]]; then
-    if systemctl is-active --quiet nginx; then
+    if systemctl is-active --quiet "$NGINX_SERVICE"; then
       green "运行中"
     else
       red "未运行"
     fi
   else
-    if rc-service nginx status 2>/dev/null | grep -q "started"; then
+    if rc-service "$NGINX_SERVICE" status 2>/dev/null | grep -q "started"; then
       green "运行中"
     else
       red "未运行"
@@ -1461,7 +1655,7 @@ manage_singbox() {
         return
         ;;
       88)
-        exit 0
+       exit_script
         ;;
       *)
         red "无效输入"
