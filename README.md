@@ -1,82 +1,97 @@
-# Sing-box 一键安装脚本
+# sing-box 一键部署脚本
 
-提供多种协议的一键安装脚本，包括 Hysteria2、TUIC v5 和 VLESS Reality。
+支持 VMess / Trojan / Hysteria2 / VLESS Reality 协议，支持 Cloudflare Argo Tunnel
 
-## 脚本列表
+## 核心特性
 
-- `hy2.sh` - Sing-box Hysteria2 一键安装脚本
-- `tuic5.sh` - Sing-box TUIC v5 一键安装脚本  
-- `vless-reality.sh` - Sing-box VLESS Reality 一键安装脚本
+- 支持 4 种主流协议
+- 支持 1–4 协议任意组合
+- 支持 VMess / Trojan 双 Argo 同时运行
+- 自动生成 UUID、证书、Reality Key
+- 支持 Debian / Ubuntu / Alpine
 
-## 安装方式
+## 协议端口变量
 
-### 1. Hysteria2 (hy2.sh)
+| 协议 | 端口变量 | 说明 |
+|------|----------|------|
+| VMess WS | vmpt | VMess WebSocket 监听端口 |
+| Trojan WS | trpt | Trojan WebSocket 监听端口 |
+| Hysteria2 | hypt | Hysteria2 UDP 端口 |
+| VLESS Reality | vlrt | VLESS Reality 监听端口 |
 
-#### 交互式菜单安装：
+> ⚠️ 传入端口号即启用对应协议
+
+## 通用变量
+
+| 变量 | 说明 |
+|------|------|
+| uuid | 四协议共用 UUID（不传自动生成） |
+| cdn | CDN / SNI 域名（HY2、VLESS Reality 建议设置，如果不设置将会默认使用 www.bing.com） |
+
+## 使用示例
+
+### 单协议部署
+
+**VMess WS**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/hy2.sh -o hy2.sh && chmod +x hy2.sh && ./hy2.sh
+vmpt=2080 \
+uuid="你的UUID" \
+bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/agsb.sh)
 ```
 
-#### 非交互式全自动安装:
+**Hysteria2**
 ```bash
-PORT=31020 NGINX_PORT=31039 RANGE_PORTS=40000-41000 NODE_NAME="小叮当的节点" bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/hy2.sh)
+hypt=2082 \
+uuid="你的UUID" \
+cdn="www.cloudflare.com" \
+bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/agsb.sh)
 ```
 
-### 2. TUIC v5 (tuic5.sh)
+### 多协议部署
 
-#### 交互式菜单安装：
+**VMess + Trojan**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/tuic5.sh -o tuic5.sh && chmod +x tuic5.sh && ./tuic5.sh
+vmpt=2080 \
+trpt=2081 \
+uuid="你的UUID" \
+bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/agsb.sh)
 ```
 
-#### 非交互式全自动安装:
+**4协议全开**
 ```bash
-PORT=31020 NGINX_PORT=31021 RANGE_PORTS=40000-41000 NODE_NAME="小叮当的节点" bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/tuic5.sh)
+vmpt=2080 \
+trpt=2081 \
+hypt=2082 \
+vlrt=2083 \
+uuid="你的UUID" \
+cdn="www.cloudflare.com" \
+bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/agsb.sh)
 ```
 
-### 3. VLESS Reality (vless-reality.sh)
+## Cloudflare Argo 隧道（可选）
 
-#### 交互式菜单安装：
+Argo是入口方式，不是协议，最多支持2个（VMess/Trojan各1个）
+
+| 变量 | 说明 |
+|------|------|
+| argo_vm | 启用 VMess Argo |
+| agn_vm | VMess Argo 绑定域名 |
+| agk_vm | VMess Argo Token |
+| argo_tr | 启用 Trojan Argo |
+| agn_tr | Trojan Argo 绑定域名 |
+| agk_tr | Trojan Argo Token |
+
+**双Argo示例**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/vless-reality.sh -o vless-reality.sh && chmod +x vless-reality.sh && ./vless-reality.sh
+vmpt=2080 \
+trpt=2081 \
+uuid="你的UUID" \
+cdn="www.cloudflare.com" \
+argo_vm=1 \
+agn_vm="vm.example.com" \
+agk_vm="VM_ARGO_TOKEN" \
+argo_tr=1 \
+agn_tr="tr.example.com" \
+agk_tr="TR_ARGO_TOKEN" \
+bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/agsb.sh)
 ```
-
-#### 非交互式全自动安装:
-```bash
-PORT=31090 SNI=www.visa.com NODE_NAME="小叮当的节点" bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/vless-reality.sh)
-```
-
-> 注意：未提供 PORT / NGINX_PORT 时，脚本将暂停并提示输入（不会直接失败）
-
-## 支持的环境变量
-
-### hy2.sh 支持的环境变量：
-- `PORT` - 必填，HY2 主端口（UDP）
-- `NGINX_PORT` - 必填，订阅端口（TCP）
-- `UUID` - 可选，用户UUID
-- `RANGE_PORTS` - 可选，跳跃端口范围
-- `NODE_NAME` - 可选，节点名称
-
-### tuic5.sh 支持的环境变量：
-- `PORT` - 必填，TUIC 主端口（UDP）
-- `NGINX_PORT` - 必填，订阅端口（TCP）
-- `UUID` - 可选，用户UUID
-- `RANGE_PORTS` - 可选，跳跃端口范围
-- `NODE_NAME` - 可选，节点名称
-
-### vless-reality.sh 支持的环境变量：
-- `PORT` - 必填，VLESS 监听端口（TCP）
-- `NGINX_PORT` - 必填，订阅端口（TCP）
-- `UUID` - 可选，用户UUID
-- `NODE_NAME` - 可选，节点名称
-- `SNI` - 可选，SNI 值
-- `REALITY_PBK` - 可选，Reality 公钥
-- `REALITY_SID` - 可选，Reality 短ID
-
-## 特性
-
-- 支持自动 / 交互模式
-- 支持跳跃端口（hy2 和 tuic5）
-- 支持自定义节点名称
-- 自动配置防火墙
-- 支持订阅服务
