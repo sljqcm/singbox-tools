@@ -340,7 +340,7 @@ agsbstatus(){
     echo "=========当前内核运行状态========="
     procs=$(find /proc/*/exe -type l 2>/dev/null | grep -E '/proc/[0-9]+/exe' | xargs -r readlink 2>/dev/null)
     if echo "$procs" | grep -Eq 'agsb/sing-box' || pgrep -f 'agsb/sing-box' >/dev/null 2>&1; then echo "Sing-box (版本V$("$HOME/agsb/sing-box" version 2>/dev/null | awk '/version/{print $NF}'))：运行中"; else echo "Sing-box：未启用"; fi
-    if echo "$procs" | grep -Eq 'agsb/c' || pgrep -f 'agsb/c' >/dev/null 2>&1; then echo "Argo (版本V$("$HOME/agsb/cloudflared" version 2>/dev/null | awk '{print $3}'))：运行中"; else echo "Argo：未启用"; fi
+    if echo "$procs" | grep -Eq 'agsb/c' || pgrep -f 'agsb/c' >/dev/null 2>&1; then echo "cloudflared Argo (版本V$("$HOME/agsb/cloudflared" version 2>/dev/null | awk '{print $3}'))：运行中"; else echo "Argo：未启用"; fi
 }
 cip(){
     ipbest(){ serip=$( (curl -s4m5 -k "$v46url") || (wget -4 -qO- --tries=2 "$v46url") ); if echo "$serip" | grep -q ':'; then server_ip="[$serip]"; else server_ip="$serip"; fi; echo "$server_ip" > "$HOME/agsb/server_ip.log"; }
@@ -387,7 +387,7 @@ cip(){
 
         green ""
         green "💣 443端口 Argo-TLS 节点 (优选IP可替换):"
-        green "${vmatls_link1}${tratls_link1}"
+        green "${vmatls_link1}${tratls_link1}" | tee -a "$HOME/agsb/jh.txt"
 
         yellow "---------------------------------------------------------"
 
