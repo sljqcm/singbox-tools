@@ -766,7 +766,7 @@ cip(){
         if [ -f "$HOME/agsb/port_hy2" ]; then
             port_hy2=$(cat "$HOME/agsb/port_hy2")
             node_name_display=$(get_node_name "hy2")
-            green "节点名称: $node_name_display"
+            purple "节点名称: $node_name_display"
             yellow "【Hysteria2】"
             content="hysteria2://$uuid@$server_v4:$port_hy2?security=tls&alpn=h3&insecure=1&sni=$cdn_domain#$node_name_display"
             green "$content"
@@ -780,7 +780,7 @@ cip(){
             public_key=$(awk 'NR==2{print $2}' "$HOME/agsb/reality.key")
             short_id=$(cat "$HOME/agsb/short_id")
             node_name_display=$(get_node_name "vless")
-            green "节点名称: $node_name_display"
+            purple "节点名称: $node_name_display"
             yellow "【VLESS Reality】"
             content="vless://$uuid@$server_v4:$port_vlr?encryption=none&security=reality&sni=$cdn_domain&fp=chrome&flow=xtls-rprx-vision&publicKey=$public_key&shortId=$short_id#$node_name_display"
             green "$content"
@@ -797,7 +797,7 @@ cip(){
         if [ -f "$HOME/agsb/port_hy2" ]; then
             port_hy2=$(cat "$HOME/agsb/port_hy2")
             node_name_display=$(get_node_name "hy2-v6")
-            green "节点名称: $node_name_display"
+            purple "节点名称: $node_name_display"
             yellow "【Hysteria2】"
             content="hysteria2://$uuid@$server_v6:$port_hy2?security=tls&alpn=h3&insecure=1&sni=$cdn_domain#$node_name_display"
             green "$content"
@@ -811,7 +811,7 @@ cip(){
             public_key=$(awk 'NR==2{print $2}' "$HOME/agsb/reality.key")
             short_id=$(cat "$HOME/agsb/short_id")
             node_name_display=$(get_node_name "vless-v6")
-            green "节点名称: $node_name_display"
+            purple "节点名称: $node_name_display"
             yellow "【VLESS Reality】"
             content="vless://$uuid@$server_v6:$port_vlr?encryption=none&security=reality&sni=$cdn_domain&fp=chrome&flow=xtls-rprx-vision&publicKey=$public_key&shortId=$short_id#$node_name_display"
             green "$content"
@@ -824,8 +824,8 @@ cip(){
     if [ -n "$ARG_AG_VM_FLAG" ] && [ -n "$ARG_AG_VM_DOMAIN" ]; then
         purple "----------- Argo -----------"
         node_name_display=$(get_node_name "vmess-argo")
-        green "节点名称: $node_name_display"
-        vmess_json=$(printf '{"v":"2","ps":"s%","add":"%s","port":"443","id":"%s","aid":"0","net":"ws","type":"none","host":"%s","path":"/%s-vm","tls":"tls","sni":"%s"}' \
+        purple "节点名称: $node_name_display"
+        vmess_json=$(printf '{"v":"2","ps":"%s","add":"%s","port":"443","id":"%s","aid":"0","net":"ws","type":"none","host":"%s","path":"/%s-vm","tls":"tls","sni":"%s"}' \
          "$node_name_display"   "$cdn_domain" "$uuid" "$ARG_AG_VM_DOMAIN" "$uuid" "$ARG_AG_VM_DOMAIN")
         
         vmess_b64=$(echo "$vmess_json" | base64 | tr -d '\n')
@@ -839,7 +839,7 @@ cip(){
 
     if [ -n "$ARG_AG_TR_FLAG" ] && [ -n "$ARG_AG_TR_DOMAIN" ]; then
         node_name_display=$(get_node_name "trojan")
-        green "节点名称: $node_name_display"
+        purple "节点名称: $node_name_display"
         yellow "【Trojan Argo】"
         content="trojan://$uuid@$cdn_domain:443?security=tls&type=ws&host=$ARG_AG_TR_DOMAIN&path=/$uuid-tr&sni=$ARG_AG_TR_DOMAIN&fp=chrome#$node_name_display"
         green "$content"
