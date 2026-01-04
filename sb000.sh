@@ -560,51 +560,37 @@ cip(){
 }
 
 # Remove agsb folder
-cleandel() {
-    # Check if $HOME exists and is accessible
-    if [ ! -d "$HOME" ]; then
-        echo "Error: $HOME directory is not accessible."
-        return 1  # Exit the function if $HOME is not accessible
-    fi
+cleandel(){
+    # Change to $HOME to avoid issues when deleting directories
+    cd $HOME
 
-    # Ensure we're working from the home directory
-    cd $HOME  # Safely change to the home directory
-
-    # Stop any running processes related to agsb or sing-box
+    # Continue with the cleanup
     for P in /proc/[0-9]*; do
         if [ -L "$P/exe" ]; then
             TARGET=$(readlink -f "$P/exe" 2>/dev/null)
-            if echo "$TARGET" | grep -qE '/agsb/c|/agsb/sing-box'; then
+            if echo "$TARGET" | grep -qE '/agsb/c|/agsb/sing-box'; then 
                 kill "$(basename "$P")" 2>/dev/null
             fi
         fi
     done
 
-    # Kill any remaining agsb or sing-box processes
     kill -15 $(pgrep -f 'agsb/c' 2>/dev/null) $(pgrep -f 'agsb/sing-box' 2>/dev/null) >/dev/null 2>&1
-
-    # Clean up .bashrc and remove PATH related to agsb
     sed -i '/agsb/d' ~/.bashrc
     sed -i '/export PATH="\$HOME\/bin:\$PATH"/d' ~/.bashrc
     . ~/.bashrc 2>/dev/null
 
-    # Remove agsb-related cron jobs
     crontab -l > /tmp/crontab.tmp 2>/dev/null
     sed -i '/agsb/d' /tmp/crontab.tmp
     crontab /tmp/crontab.tmp >/dev/null 2>&1
     rm /tmp/crontab.tmp
-
-    # Remove agsb from the $HOME/bin directory
     rm -rf "$HOME/bin/agsb"
 
-    # Stop and disable services if systemd is used
     if pidof systemd >/dev/null 2>&1; then
         for svc in sb argo; do
             systemctl stop "$svc" >/dev/null 2>&1
             systemctl disable "$svc" >/dev/null 2>&1
         done
         rm -f /etc/systemd/system/{sb.service,argo.service}
-    # If using OpenRC or another init system
     elif command -v rc-service >/dev/null 2>&1; then
         for svc in sing-box argo; do
             rc-service "$svc" stop >/dev/null 2>&1
