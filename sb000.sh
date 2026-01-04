@@ -261,10 +261,12 @@ EOF
         if [ -z "$port_tu" ] && [ ! -e "$HOME/agsb/port_tuic" ]; then port_tu=$(shuf -i 10000-65535 -n 1); echo "$port_tu" > "$HOME/agsb/port_tu"; elif [ -n "$port_tu" ]; then echo "$port_tu" > "$HOME/agsb/port_tu"; fi
         
         port_tu=$(cat "$HOME/agsb/port_tu"); 
+        password=$uuid
+
         yellow "Tuic5端口：$port_tu"
 
          cat >> "$HOME/agsb/sb.json" <<EOF
-{"type": "tuic5", "tag": "tuic5-sb", "listen": "::", "listen_port": ${port_tu}, "users": [ { "uuid": "${uuid}" } ],"congestion_control": "bbr", "tls": { "enabled": true, "certificate_path": "$HOME/agsb/tuic5_cert.pem", "key_path": "$HOME/agsb/tuic5_private.key","server_name": "${tu_sni}" }},
+{"type": "tuic", "tag": "tuic-sb", "listen": "::", "listen_port": ${port_tu}, "users": [ {  "uuid": "$uuid", "password": "$password" } ],"congestion_control": "bbr", "tls": { "enabled": true,"alpn": ["h3"], "certificate_path": "$HOME/agsb/tuic5_cert.pem", "key_path": "$HOME/agsb/tuic5_private.key","server_name": "${tu_sni}" }},
 EOF
     fi
 
@@ -515,10 +517,12 @@ cip(){
     
     
      # TUIC5 protocol (tuic5 or tupt)
-    if grep -q "tuic5-sb" "$HOME/agsb/sb.json"; then
+    if grep -q "tuic-sb" "$HOME/agsb/sb.json"; then
         port_tu=$(cat "$HOME/agsb/port_tu")
         tu_sni=$(cat "$HOME/agsb/tu_sni"); 
-        tuic5_link="tuic5://${uuid}@${server_ip}:${port_tu}?congestion_control=bbr&security=tls&sni=${tu_sni}&version=5#${sxname}tuic5-$hostname"
+        password=$uuid
+
+        tuic5_link="tuic5://${uuid}:${password}@${server_ip}:${port_tu}?sni=${tu_sni}&congestion_control=bbr&security=tls&udp_relay_mode=native&alpn=h3&allow_insecure=1#${sxname}tuic5-$hostname"
         yellow "💣【 TUIC5 】(直连协议)"
         green "$tuic5_link" | tee -a "$HOME/agsb/jh.txt"
         echo;
