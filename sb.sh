@@ -274,7 +274,7 @@ EOF
         port_vlr=$(cat "$HOME/agsb/port_vlr"); echo "VLESS-Reality-Vision端口：$port_vlr"
         if [ ! -f "$HOME/agsb/reality.key" ]; then "$HOME/agsb/sing-box" generate reality-keypair > "$HOME/agsb/reality.key"; fi
         private_key=$(sed -n '1p' "$HOME/agsb/reality.key" | awk '{print $2}')
-        [ -f "$HOME/agsb/short_id" ] && short_id=$(cat "$HOME/agsb/short_id") || { short_id=$(openssl rand -hex 4); echo "$short_id" > "$HOME/agsb/short_id"; }
+        [ -f "$HOME/agsb/short_id" ] && short_id=$(cat "$HOME/agsb/short_id") || { short_id=$(openssl rand -hex 4); echo "$short_id" > "$HOME/agsb/short_id";  yellow "short_id值=${short_id}" }
 
 
         # server= www.ua.edu
@@ -372,7 +372,7 @@ EOF
     sleep 5; echo
     if find /proc/*/exe -type l 2>/dev/null | grep -E '/proc/[0-9]+/exe' | xargs -r readlink 2>/dev/null | grep -Eq 'agsb/(sing-box|c)' || pgrep -f 'agsb/(sing-box|c)' >/dev/null 2>&1 ; then
         [ -f ~/.bashrc ] || touch ~/.bashrc; sed -i '/agsb/d' ~/.bashrc; SCRIPT_PATH="$HOME/bin/agsb"; mkdir -p "$HOME/bin"; (curl -sL "$agsburl" -o "$SCRIPT_PATH") || (wget -qO "$SCRIPT_PATH" "$agsburl"); chmod +x "$SCRIPT_PATH"
-        if ! pidof systemd >/dev/null 2>&1 && ! command -v rc-service >/dev/null 2>&1; then echo "if ! pgrep -f 'agsb/sing-box' >/dev/null 2>&1; then export cf_host=\"${cf_host}\" cf_port=\"${cf_port}\" name=\"${name}\" ippz=\"${ippz}\" argo=\"${argo}\" uuid=\"${uuid}\" $vmp=\"${port_vm_ws}\" $trp=\"${port_tr}\" $hyp=\"${port_hy2}\" $vlr=\"${port_vlr}\" agn=\"${ARGO_DOMAIN}\" agk=\"${ARGO_AUTH}\"; bash "$HOME/bin/agsb"; fi" >> ~/.bashrc; fi
+        if ! pidof systemd >/dev/null 2>&1 && ! command -v rc-service >/dev/null 2>&1; then echo "if ! pgrep -f 'agsb/sing-box' >/dev/null 2>&1; then export cf_host=\"${cf_host}\" cf_port=\"${cf_port}\" short_id=\"${short_id}\" name=\"${name}\" ippz=\"${ippz}\" argo=\"${argo}\" uuid=\"${uuid}\" $vmp=\"${port_vm_ws}\" $trp=\"${port_tr}\" $hyp=\"${port_hy2}\" $vlr=\"${port_vlr}\" agn=\"${ARGO_DOMAIN}\" agk=\"${ARGO_AUTH}\"; bash "$HOME/bin/agsb"; fi" >> ~/.bashrc; fi
         sed -i '/export PATH="\$HOME\/bin:\$PATH"/d' ~/.bashrc; echo 'export PATH="$HOME/bin:$PATH"' >> "$HOME/.bashrc"; grep -qxF 'source ~/.bashrc' ~/.bash_profile 2>/dev/null || echo 'source ~/.bashrc' >> ~/.bash_profile; . ~/.bashrc 2>/dev/null
         crontab -l > /tmp/crontab.tmp 2>/dev/null
         if ! pidof systemd >/dev/null 2>&1 && ! command -v rc-service >/dev/null 2>&1; then sed -i '/agsb\/sing-box/d' /tmp/crontab.tmp; echo '@reboot sleep 10 && nohup $HOME/agsb/sing-box run -c $HOME/agsb/sb.json >/dev/null 2>&1 &' >> /tmp/crontab.tmp; fi
@@ -413,6 +413,7 @@ cip(){
         port_vlr=$(cat "$HOME/agsb/port_vlr")
         public_key=$(sed -n '2p' "$HOME/agsb/reality.key" | awk '{print $2}')
         short_id=$(cat "$HOME/agsb/short_id")
+        yellow "shortId的值=${short_id}"
         vless_link="vless://${uuid}@${server_ip}:${port_vlr}?encryption=none&security=reality&sni=$cf_host&fp=chrome&flow=xtls-rprx-vision&publicKey=${public_key}&shortId=${short_id}#${sxname}vless-reality-$hostname"
         yellow "💣【 VLESS-Reality-Vision 】(直连协议)"; green "$vless_link" | tee -a "$HOME/agsb/jh.txt"; echo;
     fi
